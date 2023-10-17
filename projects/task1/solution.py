@@ -9,14 +9,17 @@ from sklearn.preprocessing import StandardScaler
 
 from sklearn.model_selection import GridSearchCV
 
+from sklearn.cluster import KMeans
 
 # Set `EXTENDED_EVALUATION` to `True` in order to visualize your predictions.
 EXTENDED_EVALUATION = False
-EVALUATION_GRID_POINTS = 100  # Number of grid points used in extended evaluation
+EVALUATION_GRID_POINTS = 300  # Number of grid points used in extended evaluation
 
 # Cost function constants
 COST_W_UNDERPREDICT = 50.0
 COST_W_NORMAL = 1.0
+
+N_CLUSTERS = 10
 
 
 class Model(object):
@@ -43,17 +46,18 @@ class Model(object):
 
         #parameters = {'kernel__nu': (1.25, 1.5, 1.75)}
         #parameters = {'kernel__nu': (1.5)}
-        matern = Matern()
         #gpr = GaussianProcessRegressor(matern)
         #self.model = GridSearchCV(gpr, param_grid=parameters, verbose=10)
-        self.model = GaussianProcessRegressor(kernel=Matern())
+        #self.model = GaussianProcessRegressor(kernel=Matern(nu=2.5))
+        self.cluster_models = []
 
+        self.kmeans = KMeans()
 
         #kernel = RBF(1.0)
         #self.model = GaussianProcessRegressor(kernel=kernel, random_state=0)
 
-        kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(1.0, length_scale_bounds="fixed")
-        self.model = GaussianProcessRegressor(kernel=kernel, normalize_y=True, random_state=0)
+        #kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(1.0, length_scale_bounds="fixed")
+        #self.model = GaussianProcessRegressor(kernel=kernel, normalize_y=True, random_state=0)
 
         #kernel = 1 * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e2))
         #self.model = GaussianProcessRegressor(kernel=kernel, random_state=0)
@@ -74,14 +78,33 @@ class Model(object):
         gp_std = np.zeros(test_x_2D.shape[0], dtype=float)
 
         test_x_2D = self.scaler.transform(test_x_2D)
-        print("test_x")
-        print(np.mean(test_x_2D, axis=0))
-        print(np.std(test_x_2D, axis=0))
+        #print("test_x")
+        #print(np.mean(test_x_2D, axis=0))
+        #print(np.std(test_x_2D, axis=0))
+        n_test_samples = test_x_2D.shape[0]
+        gp_means = []
+        gp_stds = []
+        for i in range(n_test_samples):
+            current_test_sample = test_x_2D[i].reshape(1, -1)
+            #print(current_test_sample)
+            c_idx = self.kmeans.predict(current_test_sample)[0]
+            #print(c_idx)
+            model = self.cluster_models[c_idx]
 
-        gp_mean, gp_std = self.model.predict(test_x_2D, return_std=True)
+            gp_mean, gp_std = model.predict(current_test_sample, return_std=True)
+            print("test sample " + str(i))
+            print(gp_mean)
+            print(gp_std)
 
-        print("GP mean:  " + str(np.min(gp_mean)) + " ... " + str(np.max(gp_mean)))
-        print("GP std:  " + str(np.min(gp_std)) + " ... " + str(np.max(gp_std)))
+            gp_means.append(gp_mean)
+            gp_stds.append(gp_std)
+        
+        gp_mean = np.array(gp_means)
+        gp_std = np.array(gp_stds)
+        #gp_mean, gp_std = self.model.predict(test_x_2D, return_std=True)
+
+        #print("GP mean:  " + str(np.min(gp_mean)) + " ... " + str(np.max(gp_mean)))
+        #print("GP std:  " + str(np.min(gp_std)) + " ... " + str(np.max(gp_std)))
         # TODO: Use the GP posterior to form your predictions here
         #predictions = gp_mean + 10000000 * test_x_AREA * gp_std
 
@@ -90,8 +113,6 @@ class Model(object):
 
         return predictions, gp_mean * self.y_std + gp_mean, gp_std * self.y_std 
 
-        
-
     def fitting_model(self, train_y: np.ndarray, train_x_2D: np.ndarray):
         """
         Fit your model on the given training data.
@@ -99,20 +120,31 @@ class Model(object):
         :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
         """
 
-        train_x_2D = self.scaler.fit_transform(train_x_2D)
+        self.preprocessing(train_y, train_x_2D)
+        cluster_idx = self.clustering(train_y, train_x_2D)
 
-        print("y_train")
-        train_y = (train_y - self.y_mean ) / self.y_std # Standardize labels
-        print(np.mean(train_y, axis=0))
-        print(np.std(train_y, axis=0))
+        for i in range(N_CLUSTERS):
+            mask = (cluster_idx == i)
+            X = train_x_2D[mask]
+            y = train_y[mask]
+            gpr = GaussianProcessRegressor(kernel=Matern(length_scale_bounds="fixed"))
+            gpr.fit(X, y)
+            self.cluster_models.append(gpr)
 
-        print("x_train")
-        print(np.mean(train_x_2D, axis=0))
-        print(np.std(train_x_2D, axis=0))
 
         # TODO: Fit your model here
-        self.model.fit(train_x_2D, train_y)
+        #self.model.fit(train_x_2D, train_y)
 
+    def preprocessing(self, train_y: np.ndarray, train_x_2D: np.ndarray):
+        train_x_2D = self.scaler.fit_transform(train_x_2D)
+        train_y = (train_y - self.y_mean ) / self.y_std # Standardize labels
+
+    def clustering(self, train_y: np.ndarray, train_x: np.ndarray):
+        #data = np.column_stack((train_x, train_y))
+        self.kmeans = KMeans(n_clusters=N_CLUSTERS, random_state=0, n_init=10)
+        print(train_x.shape)
+        k_pred = self.kmeans.fit_predict(train_x)
+        return k_pred
 
 # You don't have to change this function
 def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: np.ndarray) -> float:
