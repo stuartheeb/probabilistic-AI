@@ -7,6 +7,9 @@ from sklearn.preprocessing import StandardScaler
 #import matplotlib.pyplot as plt
 #from matplotlib import cm
 
+from sklearn.model_selection import GridSearchCV
+
+
 # Set `EXTENDED_EVALUATION` to `True` in order to visualize your predictions.
 EXTENDED_EVALUATION = False
 EVALUATION_GRID_POINTS = 100  # Number of grid points used in extended evaluation
@@ -29,12 +32,31 @@ class Model(object):
         We already provide a random number generator for reproducibility.
         """
         self.rng = np.random.default_rng(seed=0)
+        
         # TODO: Add custom initialization for your model here if necessary
-        self.scalar = StandardScaler()
-        self.kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(1.0, length_scale_bounds="fixed")
-        #self.kernel = RBF(1.0, length_scale_bounds=(1e-2, 1e2))
-        #self.gpr = GaussianProcessRegressor(kernel=self.kernel, n_restarts_optimizer=5, random_state=0)
-        self.gpr = GaussianProcessRegressor(kernel=self.kernel, random_state=0)
+
+        self.scaler = StandardScaler()
+        #self.scaler_y = StandardScaler()
+        self.y_mean = 33.17299788386953
+        self.y_std = 18.513831967495353
+        
+
+        #parameters = {'kernel__nu': (1.25, 1.5, 1.75)}
+        #parameters = {'kernel__nu': (1.5)}
+        matern = Matern()
+        #gpr = GaussianProcessRegressor(matern)
+        #self.model = GridSearchCV(gpr, param_grid=parameters, verbose=10)
+        self.model = GaussianProcessRegressor(kernel=Matern())
+
+
+        #kernel = RBF(1.0)
+        #self.model = GaussianProcessRegressor(kernel=kernel, random_state=0)
+
+        kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(1.0, length_scale_bounds="fixed")
+        self.model = GaussianProcessRegressor(kernel=kernel, normalize_y=True, random_state=0)
+
+        #kernel = 1 * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e2))
+        #self.model = GaussianProcessRegressor(kernel=kernel, random_state=0)
 
     def make_predictions(self, test_x_2D: np.ndarray, test_x_AREA: np.ndarray) -> typing.Tuple[
         np.ndarray, np.ndarray, np.ndarray]:
@@ -51,16 +73,22 @@ class Model(object):
         gp_mean = np.zeros(test_x_2D.shape[0], dtype=float)
         gp_std = np.zeros(test_x_2D.shape[0], dtype=float)
 
-        test_x_2D = self.scalar.transform(test_x_2D)
+        test_x_2D = self.scaler.transform(test_x_2D)
+        print("test_x")
         print(np.mean(test_x_2D, axis=0))
         print(np.std(test_x_2D, axis=0))
 
-        gp_mean, gp_std = self.gpr.predict(test_x_2D, return_std=True)
+        gp_mean, gp_std = self.model.predict(test_x_2D, return_std=True)
 
+        print("GP mean:  " + str(np.min(gp_mean)) + " ... " + str(np.max(gp_mean)))
+        print("GP std:  " + str(np.min(gp_std)) + " ... " + str(np.max(gp_std)))
         # TODO: Use the GP posterior to form your predictions here
-        predictions = gp_mean + 10000000 * test_x_AREA * gp_std
-        
-        return predictions, gp_mean, gp_std
+        #predictions = gp_mean + 10000000 * test_x_AREA * gp_std
+
+        predictions = gp_mean * self.y_std + self.y_mean # Transform labels back
+
+
+        return predictions, gp_mean * self.y_std + gp_mean, gp_std * self.y_std 
 
         
 
@@ -71,12 +99,19 @@ class Model(object):
         :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
         """
 
-        train_x_2D = self.scalar.fit_transform(train_x_2D)
+        train_x_2D = self.scaler.fit_transform(train_x_2D)
+
+        print("y_train")
+        train_y = (train_y - self.y_mean ) / self.y_std # Standardize labels
+        print(np.mean(train_y, axis=0))
+        print(np.std(train_y, axis=0))
+
+        print("x_train")
         print(np.mean(train_x_2D, axis=0))
         print(np.std(train_x_2D, axis=0))
 
         # TODO: Fit your model here
-        self.gpr.fit(train_x_2D, train_y)
+        self.model.fit(train_x_2D, train_y)
 
 
 # You don't have to change this function
