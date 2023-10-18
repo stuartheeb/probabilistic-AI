@@ -22,8 +22,10 @@ EVALUATION_GRID_POINTS = 300  # Number of grid points used in extended evaluatio
 COST_W_UNDERPREDICT = 50.0
 COST_W_NORMAL = 1.0
 
+# Clustering constants (currently not implemented)
 N_CLUSTERS = 10
 
+# Training constants
 LOAD_PRETRAINED_MODEL = True
 TRAINING_ITERATIONS = 500 # Irrelevant when LOAD_PRETRAINED_MODEL = True
 
@@ -31,7 +33,7 @@ class ExactGPModel(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):
         super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
         self.mean_module = gpytorch.means.ConstantMean()
-        #self.mean_module = gpytorch.means.ZeroMean()
+        #self.mean_module = gpytorch.means.ZeroMean() # TODO: Try this
         self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
     
     def forward(self, x):
@@ -52,39 +54,10 @@ class Model(object):
         We already provide a random number generator for reproducibility.
         """
         self.rng = np.random.default_rng(seed=0)
-        
-        self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
         # TODO: Add custom initialization for your model here if necessary
 
-        ###self.scaler = StandardScaler()
-        #self.scaler_y = StandardScaler()
-        ###self.y_mean = 33.17299788386953
-        ###self.y_std = 18.513831967495353
-        
-
-        #parameters = {'kernel__nu': (1.25, 1.5, 1.75)}
-        #parameters = {'kernel__length_scale': [1e0, 1e1, 1e2, 1e3, 1e4, 1e5], 'kernel__length_scale_bounds': ['fixed']}
-        ###parameters = {'kernel__length_scale': [1e0], 'kernel__length_scale_bounds': [(1e-8, 1e2)]}
-        #parameters = {}
-        #kernel = RBF(length_scale=10.0, length_scale_bounds="fixed") + WhiteKernel(noise_level=1.0)
-        #kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(1.0, length_scale_bounds="fixed")
-        ###kernel = RBF()
-        #kernel = Matern(nu=1.5, length_scale_bounds="fixed")
-        ###gpr = GaussianProcessRegressor(kernel)
-        ###self.model = GridSearchCV(gpr, param_grid=parameters, scoring='neg_mean_squared_error', verbose=10)
-        #self.model = gpr
-
-        
-
-        #kernel = RBF(1.0)
-        #self.model = GaussianProcessRegressor(kernel=kernel, random_state=0)
-
-        #kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(1.0, length_scale_bounds="fixed")
-        #self.model = GaussianProcessRegressor(kernel=RBF(2.0, length_scale_bounds="fixed"), random_state=0)
-
-        #kernel = 1 * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e2))
-        #self.model = GaussianProcessRegressor(kernel=kernel, random_state=0)
+        self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
     def make_predictions(self, test_x_2D: np.ndarray, test_x_AREA: np.ndarray) -> typing.Tuple[
         np.ndarray, np.ndarray, np.ndarray]:
@@ -96,32 +69,12 @@ class Model(object):
             Tuple of three 1d NumPy float arrays, each of shape (NUM_SAMPLES,),
             containing your predictions, the GP posterior mean, and the GP posterior stddev (in that order)
         """
-
-        # TODO: Use your GP to estimate the posterior mean and stddev for each city_area here
-        ###gp_mean = np.zeros(test_x_2D.shape[0], dtype=float)
-        ###gp_std = np.zeros(test_x_2D.shape[0], dtype=float)
-
-        ###test_x_2D = self.scaler.transform(test_x_2D)
-        ###print(np.mean(test_x_2D, axis=0))
-        ###print(np.std(test_x_2D, axis=0))
-
-        ###gp_mean, gp_std = self.model.predict(test_x_2D, return_std=True)
-
-        #print("GP mean:  " + str(np.min(gp_mean)) + " ... " + str(np.max(gp_mean)))
-        #print("GP std:  " + str(np.min(gp_std)) + " ... " + str(np.max(gp_std)))
-        # TODO: Use the GP posterior to form your predictions here
-        #predictions = gp_mean + 10000000 * test_x_AREA * gp_std
-
-        ###predictions = gp_mean * self.y_std + self.y_mean # Transform labels back
-
-
-        ###return predictions, gp_mean * self.y_std + gp_mean, gp_std * self.y_std 
         
         self.model.eval()
         self.likelihood.eval()
 
+        # TODO: Use your GP to estimate the posterior mean and stddev for each city_area here
         tt = torch.tensor(test_x_2D, dtype=torch.float32)
-        # TODO: Use your GP to estimate the posterior mean and stddev for each location here
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
             output = self.model(tt)
             
@@ -129,7 +82,6 @@ class Model(object):
             gp_std = output.stddev.numpy()
 
         # TODO: Use the GP posterior to form your predictions here
-        #predictions = gp_mean*(1+gp_std*0.0088)
         predictions = gp_mean
 
         return predictions + test_x_AREA * gp_std, gp_mean, gp_std # TODO A bit shady
@@ -141,39 +93,21 @@ class Model(object):
         :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
         """
 
-        #train_y , train_x_2D = self.preprocessing(train_y, train_x_2D)
-
-
-        #cluster_idx = self.clustering(train_y, train_x_2D)
-
-        #for i in range(N_CLUSTERS):
-        #    mask = (cluster_idx == i)
-        #    X = train_x_2D[mask]
-        #    y = train_y[mask]
-        #    gpr = GaussianProcessRegressor(kernel=Matern(length_scale_bounds="fixed"))
-        #    gpr.fit(X, y)
-        #    self.cluster_models.append(gpr)
-
-
-        # TODO: Fit your model here
-        ###self.model.fit(1e5*train_x_2D, train_y)
-
-        ###print(self.model.best_params_)
-        ###best_model = self.model.best_estimator_
-        ###self.model = best_model
-        ###self.model.fit(train_x_2D, train_y)
+        # Maybe preprocessing?
 
         x = torch.tensor(train_x_2D, dtype=torch.float32)
         y = torch.tensor(train_y, dtype=torch.float32)
-        #loaded = torch.load('model_state_improved4.pth', map_location = torch.device('cpu'))
         self.model = ExactGPModel(x, y, self.likelihood)
-        #self.model.load_state_dict(loaded)
+
+        # TODO: Fit your model here        
 
         if(LOAD_PRETRAINED_MODEL):
             print("Loading pretrained model...")
             pretrained = torch.load('pretrained.pth', map_location = torch.device('cpu'))
             self.model.load_state_dict(pretrained)
         else:
+            # Code mostly from gpytorch documentation
+
             print("Training new model...")
 
             # Find optimal model hyperparameters
@@ -209,19 +143,6 @@ class Model(object):
             
             print("Saving model...")
             torch.save(self.model.state_dict(), 'pretrained.pth')
-            
-
-    def preprocessing(self, train_y: np.ndarray, train_x_2D: np.ndarray):
-        train_x_2D = self.scaler.fit_transform(train_x_2D)
-        #train_y = (train_y - self.y_mean ) / self.y_std # Standardize labels
-        return train_y, train_x_2D
-
-    def clustering(self, train_y: np.ndarray, train_x: np.ndarray):
-        #data = np.column_stack((train_x, train_y))
-        self.kmeans = KMeans(n_clusters=N_CLUSTERS, random_state=0, n_init=10)
-        print(train_x.shape)
-        k_pred = self.kmeans.fit_predict(train_x)
-        return k_pred
 
 # You don't have to change this function
 def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: np.ndarray) -> float:
@@ -246,7 +167,6 @@ def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: 
     # Weigh the cost and return the average
     return np.mean(cost * weights)
 
-
 # You don't have to change this function
 def is_in_circle(coor, circle_coor):
     """
@@ -256,7 +176,6 @@ def is_in_circle(coor, circle_coor):
     :return: True if the coordinate is inside the circle, False otherwise
     """
     return (coor[0] - circle_coor[0]) ** 2 + (coor[1] - circle_coor[1]) ** 2 < circle_coor[2] ** 2
-
 
 # You don't have to change this function
 def determine_city_area_idx(visualization_xs_2D):
@@ -288,7 +207,6 @@ def determine_city_area_idx(visualization_xs_2D):
         visualization_xs_AREA[i] = any([is_in_circle(coor, circ) for circ in circles])
 
     return visualization_xs_AREA
-
 
 # You don't have to change this function
 def perform_extended_evaluation(model: Model, output_dir: str = '/results'):
@@ -327,7 +245,6 @@ def perform_extended_evaluation(model: Model, output_dir: str = '/results'):
 
     plt.show()
 
-
 def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> typing.Tuple[
     np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -354,7 +271,6 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
     assert train_x_AREA.ndim == 1 and test_x_AREA.ndim == 1
 
     return train_x_2D, train_x_AREA, test_x_2D, test_x_AREA
-
 
 # you don't have to change this function
 def main():
