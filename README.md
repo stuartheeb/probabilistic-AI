@@ -3,12 +3,12 @@ ETH course „Probabilistic Artificial Intelligence“ taken in the autumn semes
 
 ## Projects
 
-| Task | Topic | Code | 
-|---|---|---|
-| [Task 1](projects/task1/) | Gaussian Processes | [solution.py](projects/task1/solution.py) |
-| [Task 2](projects/task2/) | ... | [solution.py](projects/task2/solution.py) |
-| [Task 3](projects/task3/) | ... | [solution.py](projects/task3/solution.py) |
-| [Task 4](projects/task4/) | ... | [solution.py](projects/task4/solution.py) |
+| Task | Topic | Report | Code | 
+|---|---|---|---|
+| [Task 1](projects/task1/) | Gaussian Processes | [Report](projects/task1/README.md) | [solution.py](projects/task1/solution.py) |
+| [Task 2](projects/task2/) | ... | [Report](projects/task2/README.md) | [solution.py](projects/task2/solution.py) |
+| [Task 3](projects/task3/) | ... | [Report](projects/task3/README.md) | [solution.py](projects/task3/solution.py) |
+| [Task 4](projects/task4/) | ... | [Report](projects/task4/README.md) | [solution.py](projects/task4/solution.py) |
 
 ## Homeworks
 
