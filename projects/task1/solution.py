@@ -15,7 +15,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.cluster import KMeans
 
 # Set `EXTENDED_EVALUATION` to `True` in order to visualize your predictions.
-EXTENDED_EVALUATION = False
+EXTENDED_EVALUATION = True
 EVALUATION_GRID_POINTS = 300  # Number of grid points used in extended evaluation
 
 # Cost function constants
@@ -26,14 +26,14 @@ COST_W_NORMAL = 1.0
 N_CLUSTERS = 10
 
 # Training constants
-LOAD_PRETRAINED_MODEL = True
+LOAD_PRETRAINED_MODEL = False
 TRAINING_ITERATIONS = 500 # Irrelevant when LOAD_PRETRAINED_MODEL = True
 
 class ExactGPModel(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):
         super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
         self.mean_module = gpytorch.means.ConstantMean()
-        #self.mean_module = gpytorch.means.ZeroMean() # TODO: Try this
+        #self.mean_module = gpytorch.means.ZeroMean() # TODO: Try this: its not better
         self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
     
     def forward(self, x):
@@ -82,9 +82,11 @@ class Model(object):
             gp_std = output.stddev.numpy()
 
         # TODO: Use the GP posterior to form your predictions here
-        predictions = gp_mean
+        CORRECTIVE_FACTOR = 0.75 # To counteract weighted loss. Factor 0.75 seems to work well
+        predictions = gp_mean + CORRECTIVE_FACTOR * test_x_AREA * gp_std # TODO A bit shady?
+        print("Factor: " + str(CORRECTIVE_FACTOR))
 
-        return predictions + test_x_AREA * gp_std, gp_mean, gp_std # TODO A bit shady
+        return predictions, gp_mean, gp_std
 
     def fitting_model(self, train_y: np.ndarray, train_x_2D: np.ndarray):
         """
@@ -93,7 +95,7 @@ class Model(object):
         :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
         """
 
-        # Maybe preprocessing?
+        # TODO: Maybe preprocessing?
 
         x = torch.tensor(train_x_2D, dtype=torch.float32)
         y = torch.tensor(train_y, dtype=torch.float32)
@@ -264,7 +266,6 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
     train_x_AREA = train_x[:, -1]
     test_x_2D = test_x[:, :2]
     test_x_AREA = test_x[:, -1]
-
 
     assert train_x_2D.shape[0] == train_x_AREA.shape[0] and test_x_2D.shape[0] == test_x_AREA.shape[0]
     assert train_x_2D.shape[1] == 2 and test_x_2D.shape[1] == 2
