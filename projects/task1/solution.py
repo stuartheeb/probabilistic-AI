@@ -15,7 +15,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.cluster import KMeans
 
 # Set `EXTENDED_EVALUATION` to `True` in order to visualize your predictions.
-EXTENDED_EVALUATION = True
+EXTENDED_EVALUATION = False
 EVALUATION_GRID_POINTS = 300  # Number of grid points used in extended evaluation
 
 # Cost function constants
@@ -26,7 +26,7 @@ COST_W_NORMAL = 1.0
 N_CLUSTERS = 10
 
 # Training constants
-LOAD_PRETRAINED_MODEL = False
+LOAD_PRETRAINED_MODEL = True
 TRAINING_ITERATIONS = 500 # Irrelevant when LOAD_PRETRAINED_MODEL = True
 
 class ExactGPModel(gpytorch.models.ExactGP):
