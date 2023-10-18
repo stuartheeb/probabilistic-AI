@@ -4,6 +4,8 @@ RUN micromamba install -y -n base -f /tmp/env.yaml && \
     micromamba clean --all --yes
 ARG MAMBA_DOCKERFILE_ACTIVATE=1  # (otherwise python will not be found)
 RUN pip install pyarmor==6.7.4
+RUN pip install gpytorch
+RUN pip install numpy --upgrade
 WORKDIR /code
 ADD * /code/
 ADD pytransform /code/pytransform

@@ -7,6 +7,9 @@ from sklearn.preprocessing import StandardScaler
 #import matplotlib.pyplot as plt
 #from matplotlib import cm
 
+import gpytorch
+import torch
+
 from sklearn.model_selection import GridSearchCV
 
 from sklearn.cluster import KMeans
@@ -21,6 +24,20 @@ COST_W_NORMAL = 1.0
 
 N_CLUSTERS = 10
 
+LOAD_PRETRAINED_MODEL = True
+TRAINING_ITERATIONS = 500 # Irrelevant when LOAD_PRETRAINED_MODEL = True
+
+class ExactGPModel(gpytorch.models.ExactGP):
+    def __init__(self, train_x, train_y, likelihood):
+        super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean()
+        #self.mean_module = gpytorch.means.ZeroMean()
+        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+    
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 class Model(object):
     """
@@ -36,28 +53,35 @@ class Model(object):
         """
         self.rng = np.random.default_rng(seed=0)
         
+        self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
+
         # TODO: Add custom initialization for your model here if necessary
 
-        self.scaler = StandardScaler()
+        ###self.scaler = StandardScaler()
         #self.scaler_y = StandardScaler()
-        self.y_mean = 33.17299788386953
-        self.y_std = 18.513831967495353
+        ###self.y_mean = 33.17299788386953
+        ###self.y_std = 18.513831967495353
         
 
         #parameters = {'kernel__nu': (1.25, 1.5, 1.75)}
-        #parameters = {'kernel__nu': (1.5)}
-        #gpr = GaussianProcessRegressor(matern)
-        #self.model = GridSearchCV(gpr, param_grid=parameters, verbose=10)
-        #self.model = GaussianProcessRegressor(kernel=Matern(nu=2.5))
-        self.cluster_models = []
+        #parameters = {'kernel__length_scale': [1e0, 1e1, 1e2, 1e3, 1e4, 1e5], 'kernel__length_scale_bounds': ['fixed']}
+        ###parameters = {'kernel__length_scale': [1e0], 'kernel__length_scale_bounds': [(1e-8, 1e2)]}
+        #parameters = {}
+        #kernel = RBF(length_scale=10.0, length_scale_bounds="fixed") + WhiteKernel(noise_level=1.0)
+        #kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(1.0, length_scale_bounds="fixed")
+        ###kernel = RBF()
+        #kernel = Matern(nu=1.5, length_scale_bounds="fixed")
+        ###gpr = GaussianProcessRegressor(kernel)
+        ###self.model = GridSearchCV(gpr, param_grid=parameters, scoring='neg_mean_squared_error', verbose=10)
+        #self.model = gpr
 
-        self.kmeans = KMeans()
+        
 
         #kernel = RBF(1.0)
         #self.model = GaussianProcessRegressor(kernel=kernel, random_state=0)
 
         #kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(1.0, length_scale_bounds="fixed")
-        #self.model = GaussianProcessRegressor(kernel=kernel, normalize_y=True, random_state=0)
+        #self.model = GaussianProcessRegressor(kernel=RBF(2.0, length_scale_bounds="fixed"), random_state=0)
 
         #kernel = 1 * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e2))
         #self.model = GaussianProcessRegressor(kernel=kernel, random_state=0)
@@ -74,44 +98,41 @@ class Model(object):
         """
 
         # TODO: Use your GP to estimate the posterior mean and stddev for each city_area here
-        gp_mean = np.zeros(test_x_2D.shape[0], dtype=float)
-        gp_std = np.zeros(test_x_2D.shape[0], dtype=float)
+        ###gp_mean = np.zeros(test_x_2D.shape[0], dtype=float)
+        ###gp_std = np.zeros(test_x_2D.shape[0], dtype=float)
 
-        test_x_2D = self.scaler.transform(test_x_2D)
-        #print("test_x")
-        #print(np.mean(test_x_2D, axis=0))
-        #print(np.std(test_x_2D, axis=0))
-        n_test_samples = test_x_2D.shape[0]
-        gp_means = []
-        gp_stds = []
-        for i in range(n_test_samples):
-            current_test_sample = test_x_2D[i].reshape(1, -1)
-            #print(current_test_sample)
-            c_idx = self.kmeans.predict(current_test_sample)[0]
-            #print(c_idx)
-            model = self.cluster_models[c_idx]
+        ###test_x_2D = self.scaler.transform(test_x_2D)
+        ###print(np.mean(test_x_2D, axis=0))
+        ###print(np.std(test_x_2D, axis=0))
 
-            gp_mean, gp_std = model.predict(current_test_sample, return_std=True)
-            print("test sample " + str(i))
-            print(gp_mean)
-            print(gp_std)
-
-            gp_means.append(gp_mean)
-            gp_stds.append(gp_std)
-        
-        gp_mean = np.array(gp_means)
-        gp_std = np.array(gp_stds)
-        #gp_mean, gp_std = self.model.predict(test_x_2D, return_std=True)
+        ###gp_mean, gp_std = self.model.predict(test_x_2D, return_std=True)
 
         #print("GP mean:  " + str(np.min(gp_mean)) + " ... " + str(np.max(gp_mean)))
         #print("GP std:  " + str(np.min(gp_std)) + " ... " + str(np.max(gp_std)))
         # TODO: Use the GP posterior to form your predictions here
         #predictions = gp_mean + 10000000 * test_x_AREA * gp_std
 
-        predictions = gp_mean * self.y_std + self.y_mean # Transform labels back
+        ###predictions = gp_mean * self.y_std + self.y_mean # Transform labels back
 
 
-        return predictions, gp_mean * self.y_std + gp_mean, gp_std * self.y_std 
+        ###return predictions, gp_mean * self.y_std + gp_mean, gp_std * self.y_std 
+        
+        self.model.eval()
+        self.likelihood.eval()
+
+        tt = torch.tensor(test_x_2D, dtype=torch.float32)
+        # TODO: Use your GP to estimate the posterior mean and stddev for each location here
+        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+            output = self.model(tt)
+            
+            gp_mean = output.mean.numpy()
+            gp_std = output.stddev.numpy()
+
+        # TODO: Use the GP posterior to form your predictions here
+        #predictions = gp_mean*(1+gp_std*0.0088)
+        predictions = gp_mean
+
+        return predictions + test_x_AREA * gp_std, gp_mean, gp_std # TODO A bit shady
 
     def fitting_model(self, train_y: np.ndarray, train_x_2D: np.ndarray):
         """
@@ -120,24 +141,80 @@ class Model(object):
         :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
         """
 
-        self.preprocessing(train_y, train_x_2D)
-        cluster_idx = self.clustering(train_y, train_x_2D)
+        #train_y , train_x_2D = self.preprocessing(train_y, train_x_2D)
 
-        for i in range(N_CLUSTERS):
-            mask = (cluster_idx == i)
-            X = train_x_2D[mask]
-            y = train_y[mask]
-            gpr = GaussianProcessRegressor(kernel=Matern(length_scale_bounds="fixed"))
-            gpr.fit(X, y)
-            self.cluster_models.append(gpr)
+
+        #cluster_idx = self.clustering(train_y, train_x_2D)
+
+        #for i in range(N_CLUSTERS):
+        #    mask = (cluster_idx == i)
+        #    X = train_x_2D[mask]
+        #    y = train_y[mask]
+        #    gpr = GaussianProcessRegressor(kernel=Matern(length_scale_bounds="fixed"))
+        #    gpr.fit(X, y)
+        #    self.cluster_models.append(gpr)
 
 
         # TODO: Fit your model here
-        #self.model.fit(train_x_2D, train_y)
+        ###self.model.fit(1e5*train_x_2D, train_y)
+
+        ###print(self.model.best_params_)
+        ###best_model = self.model.best_estimator_
+        ###self.model = best_model
+        ###self.model.fit(train_x_2D, train_y)
+
+        x = torch.tensor(train_x_2D, dtype=torch.float32)
+        y = torch.tensor(train_y, dtype=torch.float32)
+        #loaded = torch.load('model_state_improved4.pth', map_location = torch.device('cpu'))
+        self.model = ExactGPModel(x, y, self.likelihood)
+        #self.model.load_state_dict(loaded)
+
+        if(LOAD_PRETRAINED_MODEL):
+            print("Loading pretrained model...")
+            pretrained = torch.load('pretrained.pth', map_location = torch.device('cpu'))
+            self.model.load_state_dict(pretrained)
+        else:
+            print("Training new model...")
+
+            # Find optimal model hyperparameters
+            self.model.train()
+            self.likelihood.train()
+
+            # Use the adam optimizer
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=0.1)  # Includes GaussianLikelihood parameters
+
+            # "Loss" for GPs - the marginal log likelihood
+            mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.model)
+
+            for i in range(TRAINING_ITERATIONS):
+                # Zero gradients from previous iteration
+                optimizer.zero_grad()
+                # Output from model
+                output = self.model(x)
+
+                #
+                # TODO Add functionality to compute test score and save best
+                # test-scoring model separately (access docker functionality?)
+                #
+            
+                # Calc loss and backprop gradients
+                loss = -mll(output, y)
+                loss.backward()
+                print('Iter %d/%d - Loss: %.3f   lengthscale: %.3f   noise: %.3f' % (
+                    i + 1, TRAINING_ITERATIONS, loss.item(),
+                    self.model.covar_module.base_kernel.lengthscale.item(),
+                    self.model.likelihood.noise.item()
+                ))
+                optimizer.step()
+            
+            print("Saving model...")
+            torch.save(self.model.state_dict(), 'pretrained.pth')
+            
 
     def preprocessing(self, train_y: np.ndarray, train_x_2D: np.ndarray):
         train_x_2D = self.scaler.fit_transform(train_x_2D)
-        train_y = (train_y - self.y_mean ) / self.y_std # Standardize labels
+        #train_y = (train_y - self.y_mean ) / self.y_std # Standardize labels
+        return train_y, train_x_2D
 
     def clustering(self, train_y: np.ndarray, train_x: np.ndarray):
         #data = np.column_stack((train_x, train_y))
