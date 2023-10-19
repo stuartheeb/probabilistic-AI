@@ -14,8 +14,8 @@ ETH course „Probabilistic Artificial Intelligence“ taken in the autumn semes
 
 | Homework | Topic | Solution | 
 |---|---|---|
-| [hw1.pdf](homeworks/hw1/) |  | [hw1_solution.pdf](homeworks/solutions/hw1_solution.py) |
-| [hw2.pdf](homeworks/hw2/) |  | [hw2_solution.pdf](homeworks/solutions/hw2_solution.py) |
+| [hw1.pdf](homeworks/hw1/) | Bayesian Linear Regression | [hw1_solution.pdf](homeworks/solutions/hw1_solution.py) |
+| [hw2.pdf](homeworks/hw2/) | Gaussian Processes | [hw2_solution.pdf](homeworks/solutions/hw2_solution.py) |
 | [hw3.pdf](homeworks/hw3/) |  | [hw3_solution.pdf](homeworks/solutions/hw3_solution.py) |
 | [hw4.pdf](homeworks/hw4/) |  | [hw4_solution.pdf](homeworks/solutions/hw4_solution.py) |
 | [hw5.pdf](homeworks/hw5/) |  | [hw5_solution.pdf](homeworks/solutions/hw5_solution.py) |
