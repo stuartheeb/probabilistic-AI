@@ -7,14 +7,40 @@ from sklearn.preprocessing import StandardScaler
 #import matplotlib.pyplot as plt
 #from matplotlib import cm
 
+import gpytorch
+import torch
+
+from sklearn.model_selection import GridSearchCV
+
+from sklearn.cluster import KMeans
+
 # Set `EXTENDED_EVALUATION` to `True` in order to visualize your predictions.
 EXTENDED_EVALUATION = False
-EVALUATION_GRID_POINTS = 100  # Number of grid points used in extended evaluation
+EVALUATION_GRID_POINTS = 300  # Number of grid points used in extended evaluation
 
 # Cost function constants
 COST_W_UNDERPREDICT = 50.0
 COST_W_NORMAL = 1.0
 
+# Clustering constants (currently not implemented)
+N_CLUSTERS = 10
+
+# Training constants
+LOAD_PRETRAINED_MODEL = True
+TRAINING_ITERATIONS = 500 # Irrelevant when LOAD_PRETRAINED_MODEL = True
+
+class GP(gpytorch.models.ExactGP):
+    def __init__(self, train_x, train_y, likelihood):
+        #super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
+        super().__init__(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean()
+        #self.mean_module = gpytorch.means.ZeroMean() # TODO: Try this: its not better
+        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+    
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 class Model(object):
     """
@@ -29,12 +55,10 @@ class Model(object):
         We already provide a random number generator for reproducibility.
         """
         self.rng = np.random.default_rng(seed=0)
+
         # TODO: Add custom initialization for your model here if necessary
-        self.scalar = StandardScaler()
-        self.kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(1.0, length_scale_bounds="fixed")
-        #self.kernel = RBF(1.0, length_scale_bounds=(1e-2, 1e2))
-        #self.gpr = GaussianProcessRegressor(kernel=self.kernel, n_restarts_optimizer=5, random_state=0)
-        self.gpr = GaussianProcessRegressor(kernel=self.kernel, random_state=0)
+
+        self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
     def make_predictions(self, test_x_2D: np.ndarray, test_x_AREA: np.ndarray) -> typing.Tuple[
         np.ndarray, np.ndarray, np.ndarray]:
@@ -46,23 +70,24 @@ class Model(object):
             Tuple of three 1d NumPy float arrays, each of shape (NUM_SAMPLES,),
             containing your predictions, the GP posterior mean, and the GP posterior stddev (in that order)
         """
+        
+        self.model.eval()
+        self.likelihood.eval()
 
         # TODO: Use your GP to estimate the posterior mean and stddev for each city_area here
-        gp_mean = np.zeros(test_x_2D.shape[0], dtype=float)
-        gp_std = np.zeros(test_x_2D.shape[0], dtype=float)
-
-        test_x_2D = self.scalar.transform(test_x_2D)
-        print(np.mean(test_x_2D, axis=0))
-        print(np.std(test_x_2D, axis=0))
-
-        gp_mean, gp_std = self.gpr.predict(test_x_2D, return_std=True)
+        tt = torch.tensor(test_x_2D, dtype=torch.float32)
+        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+            output = self.model(tt)
+            
+            gp_mean = output.mean.numpy()
+            gp_std = output.stddev.numpy()
 
         # TODO: Use the GP posterior to form your predictions here
-        predictions = gp_mean + 10000000 * test_x_AREA * gp_std
-        
-        return predictions, gp_mean, gp_std
+        CORRECTIVE_FACTOR = 0.75 # To counteract weighted loss. Factor 0.75 seems to work well
+        predictions = gp_mean + CORRECTIVE_FACTOR * test_x_AREA * gp_std
+        print("Factor: " + str(CORRECTIVE_FACTOR))
 
-        
+        return predictions, gp_mean, gp_std
 
     def fitting_model(self, train_y: np.ndarray, train_x_2D: np.ndarray):
         """
@@ -71,13 +96,45 @@ class Model(object):
         :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
         """
 
-        train_x_2D = self.scalar.fit_transform(train_x_2D)
-        print(np.mean(train_x_2D, axis=0))
-        print(np.std(train_x_2D, axis=0))
+        # TODO: Maybe preprocessing?
 
-        # TODO: Fit your model here
-        self.gpr.fit(train_x_2D, train_y)
+        x = torch.tensor(train_x_2D, dtype=torch.float32)
+        y = torch.tensor(train_y, dtype=torch.float32)
+        self.model = GP(x, y, self.likelihood)
 
+        # TODO: Fit your model here        
+
+        if(LOAD_PRETRAINED_MODEL):
+            print("Loading pretrained model...")
+            pretrained = torch.load('pretrained.pth', map_location = torch.device('cpu'))
+            self.model.load_state_dict(pretrained)
+        else:
+            print("Training new model...")
+
+            self.model.train()
+            self.likelihood.train()
+
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=0.1)  # Includes GaussianLikelihood parameters
+            mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.model)
+
+            for i in range(TRAINING_ITERATIONS):
+                optimizer.zero_grad()
+                output = self.model(x)
+                #
+                # TODO Add functionality to compute test score and save best
+                # test-scoring model separately
+                #
+                loss = -mll(output, y)
+                loss.backward()
+                print('Iter %d/%d - Loss: %.3f   lengthscale: %.3f   noise: %.3f' % (
+                    i + 1, TRAINING_ITERATIONS, loss.item(),
+                    self.model.covar_module.base_kernel.lengthscale.item(),
+                    self.model.likelihood.noise.item()
+                ))
+                optimizer.step()
+            
+            print("Saving model...")
+            torch.save(self.model.state_dict(), 'pretrained.pth')
 
 # You don't have to change this function
 def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: np.ndarray) -> float:
@@ -102,7 +159,6 @@ def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: 
     # Weigh the cost and return the average
     return np.mean(cost * weights)
 
-
 # You don't have to change this function
 def is_in_circle(coor, circle_coor):
     """
@@ -112,7 +168,6 @@ def is_in_circle(coor, circle_coor):
     :return: True if the coordinate is inside the circle, False otherwise
     """
     return (coor[0] - circle_coor[0]) ** 2 + (coor[1] - circle_coor[1]) ** 2 < circle_coor[2] ** 2
-
 
 # You don't have to change this function
 def determine_city_area_idx(visualization_xs_2D):
@@ -144,7 +199,6 @@ def determine_city_area_idx(visualization_xs_2D):
         visualization_xs_AREA[i] = any([is_in_circle(coor, circ) for circ in circles])
 
     return visualization_xs_AREA
-
 
 # You don't have to change this function
 def perform_extended_evaluation(model: Model, output_dir: str = '/results'):
@@ -183,7 +237,6 @@ def perform_extended_evaluation(model: Model, output_dir: str = '/results'):
 
     plt.show()
 
-
 def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> typing.Tuple[
     np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -204,13 +257,11 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
     test_x_2D = test_x[:, :2]
     test_x_AREA = test_x[:, -1]
 
-
     assert train_x_2D.shape[0] == train_x_AREA.shape[0] and test_x_2D.shape[0] == test_x_AREA.shape[0]
     assert train_x_2D.shape[1] == 2 and test_x_2D.shape[1] == 2
     assert train_x_AREA.ndim == 1 and test_x_AREA.ndim == 1
 
     return train_x_2D, train_x_AREA, test_x_2D, test_x_AREA
-
 
 # you don't have to change this function
 def main():
