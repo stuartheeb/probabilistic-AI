@@ -29,9 +29,10 @@ N_CLUSTERS = 10
 LOAD_PRETRAINED_MODEL = True
 TRAINING_ITERATIONS = 500 # Irrelevant when LOAD_PRETRAINED_MODEL = True
 
-class ExactGPModel(gpytorch.models.ExactGP):
+class GP(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):
-        super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
+        #super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
+        super().__init__(train_x, train_y, likelihood)
         self.mean_module = gpytorch.means.ConstantMean()
         #self.mean_module = gpytorch.means.ZeroMean() # TODO: Try this: its not better
         self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
@@ -83,7 +84,7 @@ class Model(object):
 
         # TODO: Use the GP posterior to form your predictions here
         CORRECTIVE_FACTOR = 0.75 # To counteract weighted loss. Factor 0.75 seems to work well
-        predictions = gp_mean + CORRECTIVE_FACTOR * test_x_AREA * gp_std # TODO A bit shady?
+        predictions = gp_mean + CORRECTIVE_FACTOR * test_x_AREA * gp_std
         print("Factor: " + str(CORRECTIVE_FACTOR))
 
         return predictions, gp_mean, gp_std
@@ -99,7 +100,7 @@ class Model(object):
 
         x = torch.tensor(train_x_2D, dtype=torch.float32)
         y = torch.tensor(train_y, dtype=torch.float32)
-        self.model = ExactGPModel(x, y, self.likelihood)
+        self.model = GP(x, y, self.likelihood)
 
         # TODO: Fit your model here        
 
@@ -108,32 +109,21 @@ class Model(object):
             pretrained = torch.load('pretrained.pth', map_location = torch.device('cpu'))
             self.model.load_state_dict(pretrained)
         else:
-            # Code mostly from gpytorch documentation
-
             print("Training new model...")
 
-            # Find optimal model hyperparameters
             self.model.train()
             self.likelihood.train()
 
-            # Use the adam optimizer
             optimizer = torch.optim.Adam(self.model.parameters(), lr=0.1)  # Includes GaussianLikelihood parameters
-
-            # "Loss" for GPs - the marginal log likelihood
             mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.model)
 
             for i in range(TRAINING_ITERATIONS):
-                # Zero gradients from previous iteration
                 optimizer.zero_grad()
-                # Output from model
                 output = self.model(x)
-
                 #
                 # TODO Add functionality to compute test score and save best
-                # test-scoring model separately (access docker functionality?)
+                # test-scoring model separately
                 #
-            
-                # Calc loss and backprop gradients
                 loss = -mll(output, y)
                 loss.backward()
                 print('Iter %d/%d - Loss: %.3f   lengthscale: %.3f   noise: %.3f' % (
