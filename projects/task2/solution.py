@@ -31,13 +31,13 @@ Note that MAP inference can take a long time.
 
 
 def main():
-    raise RuntimeError(
-        "This main() method is for illustrative purposes only"
-        " and will NEVER be called when running your solution to generate your submission file!\n"
-        "The checker always directly interacts with your SWAGInference class and evaluate method.\n"
-        "You can remove this exception for local testing, but be aware that any changes to the main() method"
-        " are ignored when generating your submission file."
-    )
+    # raise RuntimeError(
+    #     "This main() method is for illustrative purposes only"
+    #     " and will NEVER be called when running your solution to generate your submission file!\n"
+    #     "The checker always directly interacts with your SWAGInference class and evaluate method.\n"
+    #     "You can remove this exception for local testing, but be aware that any changes to the main() method"
+    #     " are ignored when generating your submission file."
+    # )
 
     data_dir = pathlib.Path.cwd()
     model_dir = pathlib.Path.cwd()
@@ -49,6 +49,13 @@ def main():
     train_ys = torch.from_numpy(raw_train_meta["train_ys"])
     train_is_snow = torch.from_numpy(raw_train_meta["train_is_snow"])
     train_is_cloud = torch.from_numpy(raw_train_meta["train_is_cloud"])
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if device != 'cpu':
+        train_xs = train_xs.to(device)
+        train_is_snow = train_is_snow.to(device)
+        train_is_cloud = train_is_cloud.to(device)
+        train_ys = train_ys.to(device)
     dataset_train = torch.utils.data.TensorDataset(train_xs, train_is_snow, train_is_cloud, train_ys)
 
     # Load validation data
@@ -112,8 +119,8 @@ class SWAGInference(object):
         train_xs: torch.Tensor,
         model_dir: pathlib.Path,
         # TODO(1): change inference_mode to InferenceMode.SWAG_DIAGONAL
+        inference_mode: int = InferenceMode.SWAG_DIAGONAL,
         # TODO(2): change inference_mode to InferenceMode.SWAG_FULL
-        inference_mode: InferenceMode = InferenceMode.MAP,
         # TODO(2): optionally add/tweak hyperparameters
         swag_epochs: int = 30,
         swag_learning_rate: float = 0.045,
@@ -132,6 +139,9 @@ class SWAGInference(object):
         :param bma_samples: Number of networks to sample for Bayesian model averaging during prediction
         """
 
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(f"using device: {self.device}")
+
         self.model_dir = model_dir
         self.inference_mode = inference_mode
         self.swag_epochs = swag_epochs
@@ -147,12 +157,21 @@ class SWAGInference(object):
         # Store training dataset to recalculate batch normalization statistics during SWAG inference
         self.train_dataset = torch.utils.data.TensorDataset(train_xs)
 
+
+        if self.device != "cpu":
+            self.network.to(self.device)
+            print("done")
+
         # SWAG-diagonal
         # TODO(1): create attributes for SWAG-diagonal
         #  Hint: self._create_weight_copy() creates an all-zero copy of the weights
         #  as a dictionary that maps from weight name to values.
         #  Hint: you never need to consider the full vector of weights,
         #  but can always act on per-layer weights (in the format that _create_weight_copy() returns)
+        self.first_moment = self._create_weight_copy()      # dict (name -> weights)
+        self.second_moment = self._create_weight_copy()     # same shape
+        self.swag_n = 1                             # n_models
+        self.swag_diag = None
 
         # Full SWAG
         # TODO(2): create attributes for SWAG-diagonal
@@ -168,12 +187,15 @@ class SWAGInference(object):
         """
 
         # Create a copy of the current network weights
-        current_params = {name: param.detach() for name, param in self.network.named_parameters()}
+        current_params = {name: param.detach() for name, param in self.network.cpu().named_parameters()}
 
         # SWAG-diagonal
         for name, param in current_params.items():
+            self.first_moment[name] = (self.first_moment[name] * self.swag_n + param) / (self.swag_n + 1)     # update each weight
+            self.second_moment[name] = (self.second_moment[name] * self.swag_n + torch.square(param)) / (self.swag_n + 1)
+            self.swag_n += 1
             # TODO(1): update SWAG-diagonal attributes for weight `name` using `current_params` and `param`
-            raise NotImplementedError("Update SWAG-diagonal statistics")
+            # raise NotImplementedError("Update SWAG-diagonal statistics")
 
         # Full SWAG
         if self.inference_mode == InferenceMode.SWAG_FULL:
@@ -208,8 +230,10 @@ class SWAGInference(object):
             steps_per_epoch=len(loader),
         )
 
-        # TODO(1): Perform initialization for SWAG fitting
-        raise NotImplementedError("Initialize SWAG fitting")
+        # TODO(1) done: Perform initialization for SWAG fitting
+        self.first_moment = {name: param.detach() for name, param in self.network.named_parameters()}
+        self.second_moment = {name: torch.square(param.detach()) for name, param in self.network.named_parameters()}
+        # raise NotImplementedError("Initialize SWAG fitting")
 
         self.network.train()
         with tqdm.trange(self.swag_epochs, desc="Running gradient descent for SWA") as pbar:
@@ -241,7 +265,8 @@ class SWAGInference(object):
                     pbar.set_postfix(pbar_dict)
 
                 # TODO(1): Implement periodic SWAG updates using the attributes defined in __init__
-                raise NotImplementedError("Periodically update SWAG statistics")
+                self.update_swag()
+                # raise NotImplementedError("Periodically update SWAG statistics")
 
     def calibrate(self, validation_data: torch.utils.data.Dataset) -> None:
         """
@@ -368,7 +393,7 @@ class SWAGInference(object):
         """Create an all-zero copy of the network weights as a dictionary that maps name -> weight"""
         return {
             name: torch.zeros_like(param, requires_grad=False)
-            for name, param in self.network.named_parameters()
+            for name, param in self.network.cpu().named_parameters()
         }
 
     def fit(
@@ -388,8 +413,8 @@ class SWAGInference(object):
         # MAP inference to obtain initial weights
         PRETRAINED_WEIGHTS_FILE = self.model_dir / "map_weights.pt"
         if USE_PRETRAINED_INIT:
-            self.network.load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE))
-            print("Loaded pretrained MAP weights from", PRETRAINED_WEIGHTS_FILE)
+            self.network.load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE, map_location="cuda:0"))
+            print("Loaded pretrained MAP weights from", PRETRAINED_WEIGHTS_FILE, " with device ", self.device)
         else:
             self.fit_map(loader)
 
