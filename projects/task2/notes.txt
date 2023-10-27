@@ -1,0 +1,7 @@
+
+
+data is [64, 64, 3]
+weights are [32, 3, 5, 5]
+or          [32, 3, 3, 3]
+
+sigma_diag has to be same shape as theta_swa

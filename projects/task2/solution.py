@@ -50,20 +50,26 @@ def main():
     train_is_snow = torch.from_numpy(raw_train_meta["train_is_snow"])
     train_is_cloud = torch.from_numpy(raw_train_meta["train_is_cloud"])
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    if device != 'cpu':
-        train_xs = train_xs.to(device)
-        train_is_snow = train_is_snow.to(device)
-        train_is_cloud = train_is_cloud.to(device)
-        train_ys = train_ys.to(device)
-    dataset_train = torch.utils.data.TensorDataset(train_xs, train_is_snow, train_is_cloud, train_ys)
-
     # Load validation data
     val_xs = torch.from_numpy(np.load(data_dir / "val_xs.npz")["val_xs"])
     raw_val_meta = np.load(data_dir / "val_ys.npz")
     val_ys = torch.from_numpy(raw_val_meta["val_ys"])
     val_is_snow = torch.from_numpy(raw_val_meta["val_is_snow"])
     val_is_cloud = torch.from_numpy(raw_val_meta["val_is_cloud"])
+
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if device != 'cpu':
+        train_xs = train_xs.to(device)
+        train_is_snow = train_is_snow.to(device)
+        train_is_cloud = train_is_cloud.to(device)
+        train_ys = train_ys.to(device)
+        val_xs = val_xs.to(device)
+        val_ys = val_ys.to(device)
+        val_is_cloud = val_is_cloud.to(device)
+        val_is_snow = val_is_snow.to(device)
+
+    dataset_train = torch.utils.data.TensorDataset(train_xs, train_is_snow, train_is_cloud, train_ys)
     dataset_val = torch.utils.data.TensorDataset(val_xs, val_is_snow, val_is_cloud, val_ys)
 
     # Fix all randomness
@@ -157,11 +163,6 @@ class SWAGInference(object):
         # Store training dataset to recalculate batch normalization statistics during SWAG inference
         self.train_dataset = torch.utils.data.TensorDataset(train_xs)
 
-
-        if self.device != "cpu":
-            self.network.to(self.device)
-            print("done")
-
         # SWAG-diagonal
         # TODO(1): create attributes for SWAG-diagonal
         #  Hint: self._create_weight_copy() creates an all-zero copy of the weights
@@ -171,7 +172,7 @@ class SWAGInference(object):
         self.first_moment = self._create_weight_copy()      # dict (name -> weights)
         self.second_moment = self._create_weight_copy()     # same shape
         self.swag_n = 1                             # n_models
-        self.swag_diag = None
+        self.swag_diag = {}
 
         # Full SWAG
         # TODO(2): create attributes for SWAG-diagonal
@@ -181,21 +182,24 @@ class SWAGInference(object):
         # TODO(2): create additional attributes, e.g., for calibration
         self._prediction_threshold = None  # this is an example, feel free to be creative
 
+        if self.device != "cpu":
+            self.network.to(self.device)
+
     def update_swag(self) -> None:
         """
         Update SWAG statistics with the current weights of self.network.
         """
 
         # Create a copy of the current network weights
-        current_params = {name: param.detach() for name, param in self.network.cpu().named_parameters()}
+        current_params = {name: param.detach() for name, param in self.network.cuda().named_parameters()}
 
-        # SWAG-diagonal
+        # update swag attriutes
         for name, param in current_params.items():
             self.first_moment[name] = (self.first_moment[name] * self.swag_n + param) / (self.swag_n + 1)     # update each weight
             self.second_moment[name] = (self.second_moment[name] * self.swag_n + torch.square(param)) / (self.swag_n + 1)
-            self.swag_n += 1
             # TODO(1): update SWAG-diagonal attributes for weight `name` using `current_params` and `param`
             # raise NotImplementedError("Update SWAG-diagonal statistics")
+        self.swag_n += 1
 
         # Full SWAG
         if self.inference_mode == InferenceMode.SWAG_FULL:
@@ -309,11 +313,17 @@ class SWAGInference(object):
         per_model_sample_predictions = []
         for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging"):
             # TODO(1): Sample new parameters for self.network from the SWAG approximate posterior
-            raise NotImplementedError("Sample network parameters")
+            self.sample_parameters()
+
 
             # TODO(1): Perform inference for all samples in `loader` using current model sample,
             #  and add the predictions to per_model_sample_predictions
-            raise NotImplementedError("Perform inference using current model")
+            predictions = []
+            for (batch_xs, ) in loader:
+                predictions.append(self.network(batch_xs.to(self.device)))
+
+            # concat batchnorm predictions into the right shape
+            per_model_sample_predictions.append(torch.concat(predictions))
 
         assert len(per_model_sample_predictions) == self.bma_samples
         assert all(
@@ -324,8 +334,7 @@ class SWAGInference(object):
         )
 
         # TODO(1): Average predictions from different model samples into bma_probabilities
-        raise NotImplementedError("Aggregate predictions from model samples")
-        bma_probabilities = ...
+        bma_probabilities = torch.mean(torch.stack(per_model_sample_predictions), axis=0)
 
         assert bma_probabilities.dim() == 2 and bma_probabilities.size(1) == 6  # N x C
         return bma_probabilities
@@ -337,14 +346,14 @@ class SWAGInference(object):
         Hence, after calling this method, self.network corresponds to a new posterior sample.
         """
 
+        # set weights and biases
         # Instead of acting on a full vector of parameters, all operations can be done on per-layer parameters.
         for name, param in self.network.named_parameters():
             # SWAG-diagonal part
-            z_1 = torch.randn(param.size())
+            z_1 = torch.randn(param.size()).to(self.device)
             # TODO(1): Sample parameter values for SWAG-diagonal
-            raise NotImplementedError("Sample parameter for SWAG-diagonal")
-            current_mean = ...
-            current_std = ...
+            current_mean = self.first_moment[name]
+            current_std = torch.clamp(self.second_moment[name] - torch.square(self.first_moment[name]), min=0.)
             assert current_mean.size() == param.size() and current_std.size() == param.size()
 
             # Diagonal part
@@ -359,9 +368,9 @@ class SWAGInference(object):
             # Modify weight value in-place; directly changing self.network
             param.data = sampled_param
 
+        self._update_batchnorm()
         # TODO(1): Don't forget to update batch normalization statistics using self._update_batchnorm()
         #  in the appropriate place!
-        raise NotImplementedError("Update batch normalization statistics for newly sampled network")
 
     def predict_labels(self, predicted_probabilities: torch.Tensor) -> torch.Tensor:
         """
@@ -393,7 +402,7 @@ class SWAGInference(object):
         """Create an all-zero copy of the network weights as a dictionary that maps name -> weight"""
         return {
             name: torch.zeros_like(param, requires_grad=False)
-            for name, param in self.network.cpu().named_parameters()
+            for name, param in self.network.named_parameters()
         }
 
     def fit(
@@ -413,7 +422,10 @@ class SWAGInference(object):
         # MAP inference to obtain initial weights
         PRETRAINED_WEIGHTS_FILE = self.model_dir / "map_weights.pt"
         if USE_PRETRAINED_INIT:
-            self.network.load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE, map_location="cuda:0"))
+            if self.device != 'cpu':
+                self.network.cuda().load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE, map_location=self.device))
+            else:
+                self.network.load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE))
             print("Loaded pretrained MAP weights from", PRETRAINED_WEIGHTS_FILE, " with device ", self.device)
         else:
             self.fit_map(loader)
@@ -651,6 +663,13 @@ def evaluate(
     pred_prob_all = swag.predict_probabilities(xs)
     pred_prob_max, pred_ys_argmax = torch.max(pred_prob_all, dim=-1)
     pred_ys = swag.predict_labels(pred_prob_all)
+
+    if(torch.device != 'cpu'):
+        pred_prob_all = pred_prob_all.to('cpu')
+        pred_prob_max = pred_prob_max.to('cpu')
+        pred_ys = pred_ys.to('cpu')
+        pred_ys_argmax = pred_ys_argmax.to('cpu')
+        ys = ys.to('cpu')
 
     # Create a mask that ignores ambiguous samples (those with class -1)
     nonambiguous_mask = ys != -1
