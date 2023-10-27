@@ -2,6 +2,11 @@
 report.txt
 literature
 
+# my own
+*.xml
+*.iml
+*.pdf
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
