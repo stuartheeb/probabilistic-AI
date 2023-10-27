@@ -15,7 +15,7 @@ from matplotlib import pyplot as plt
 
 from util import draw_reliability_diagram, cost_function, setup_seeds, calc_calibration_curve
 
-EXTENDED_EVALUATION = False
+EXTENDED_EVALUATION = True
 """
 Set `EXTENDED_EVALUATION` to `True` in order to generate additional plots on validation data.
 """
@@ -58,7 +58,7 @@ def main():
     val_is_cloud = torch.from_numpy(raw_val_meta["val_is_cloud"])
 
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
     if device != 'cpu':
         train_xs = train_xs.to(device)
         train_is_snow = train_is_snow.to(device)
@@ -145,7 +145,8 @@ class SWAGInference(object):
         :param bma_samples: Number of networks to sample for Bayesian model averaging during prediction
         """
 
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(torch.cuda.is_available())
+        self.device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
         print(f"using device: {self.device}")
 
         self.model_dir = model_dir
@@ -320,7 +321,8 @@ class SWAGInference(object):
             #  and add the predictions to per_model_sample_predictions
             predictions = []
             for (batch_xs, ) in loader:
-                predictions.append(self.network(batch_xs.to(self.device)))
+                predictions.append(self.network(batch_xs.to(self.device)))      # TODO softmax where?
+                # predictions.append(torch.softmax(self.network(batch_xs.to(self.device)), dim=1))
 
             # concat batchnorm predictions into the right shape
             per_model_sample_predictions.append(torch.concat(predictions))
@@ -335,6 +337,7 @@ class SWAGInference(object):
 
         # TODO(1): Average predictions from different model samples into bma_probabilities
         bma_probabilities = torch.mean(torch.stack(per_model_sample_predictions), axis=0)
+        bma_probabilities = torch.softmax(bma_probabilities, dim=1)         # TODO softmax where?
 
         assert bma_probabilities.dim() == 2 and bma_probabilities.size(1) == 6  # N x C
         return bma_probabilities
@@ -709,6 +712,7 @@ def evaluate(
         fig.savefig(output_dir / "reliability_diagram.pdf")
 
         sorted_confidence_indices = torch.argsort(pred_prob_max)
+        xs = xs.cpu()
 
         # Plot samples your model is most confident about
         print("Plotting most confident validation set predictions")
