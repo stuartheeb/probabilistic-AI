@@ -3,9 +3,8 @@ COPY env.yaml /tmp/env.yaml
 RUN micromamba install -y -n base -f /tmp/env.yaml && \
     micromamba clean --all --yes
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
-RUN pip install pyarmor==6.7.4
+RUN pip install pyarmor==6.7.4 torch==2.0.1
 # RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-RUN pip install  --upgrade torch==2.0.1
 WORKDIR /code
 ADD * /code/
 ADD pytransform /code/pytransform
