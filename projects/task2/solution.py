@@ -126,7 +126,7 @@ class SWAGInference(object):
         # TODO(2): change inference_mode to InferenceMode.SWAG_FULL
         # TODO(2): optionally add/tweak hyperparameters
         swag_epochs: int = 30,  # 30
-        swag_learning_rate: float = 0.045,
+        swag_learning_rate: float = 0.045,      # 0.045
         swag_update_freq: int = 1,
         deviation_matrix_max_rank: int = 15,
         bma_samples: int = 30,  # 30
@@ -294,8 +294,8 @@ class SWAGInference(object):
 
         # TODO(1): pick a prediction threshold, either constant or adaptive.
         #  The provided value should suffice to pass the easy baseline.
-        # self._prediction_threshold = 2.0 / 3.0
-        self._prediction_threshold = 0.7
+        self._prediction_threshold = 2.0 / 3.0
+        # self._prediction_threshold = 0.7
 
         # TODO(2): perform additional calibration if desired.
         #  Feel free to remove or change the prediction threshold.
@@ -323,15 +323,16 @@ class SWAGInference(object):
         per_model_sample_predictions = []
         for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging"):
             # TODO(1): Sample new parameters for self.network from the SWAG approximate posterior
-            self.sample_parameters()
             self._update_batchnorm()
+            self.sample_parameters()
 
             # TODO(1): Perform inference for all samples in `loader` using current model sample,
             #  and add the predictions to per_model_sample_predictions
             predictions = []
             for (batch_xs, ) in loader:
-                # predictions.append(self.network(batch_xs.to(self.device)))      # TODO softmax where?
-                predictions.append(torch.softmax(self.network(batch_xs), dim=1))
+                p = self.network(batch_xs)      # TODO softmax where?
+                p = torch.softmax(p, dim=1)
+                predictions.append(p)
 
             # concat batchnorm predictions into the right shape
             per_model_sample_predictions.append(torch.concat(predictions))
@@ -362,14 +363,14 @@ class SWAGInference(object):
         # Instead of acting on a full vector of parameters, all operations can be done on per-layer parameters.
         for name, param in self.network.named_parameters():
             # SWAG-diagonal part
-            z_1 = torch.randn(param.size()).to(self.device)
+            z_1 = torch.randn(param.size()).to(self.device)            # don't know why but *2 improves it significantly
             # TODO(1): Sample parameter values for SWAG-diagonal
             current_mean = self.first_moment[name]
             current_std = self.second_moment[name] - torch.square(self.first_moment[name])      # removed clamp
             assert current_mean.size() == param.size() and current_std.size() == param.size()
 
             # Diagonal part
-            sampled_param = current_mean + current_std * z_1
+            sampled_param = current_mean - torch.sqrt(torch.abs(current_std)) * z_1
             # Full SWAG part
             if self.inference_mode == InferenceMode.SWAG_FULL:
                 # TODO(2): Sample parameter values for full SWAG
@@ -437,7 +438,6 @@ class SWAGInference(object):
                 self.network.cuda().load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE, map_location=self.device))
             else:
                 self.network.load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE))
-            print("Loaded pretrained MAP weights from", PRETRAINED_WEIGHTS_FILE, " with device ", self.device)
         else:
             self.fit_map(loader)
 
