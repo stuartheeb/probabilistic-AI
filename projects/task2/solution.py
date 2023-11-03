@@ -60,15 +60,10 @@ def main():
 
     device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
     if device != 'cpu':
-        print(f"data loaded to {device}")
         train_xs = train_xs.to(device)
         train_is_snow = train_is_snow.to(device)
         train_is_cloud = train_is_cloud.to(device)
         train_ys = train_ys.to(device)
-        val_xs = val_xs.to(device)
-        val_ys = val_ys.to(device)
-        val_is_cloud = val_is_cloud.to(device)
-        val_is_snow = val_is_snow.to(device)
 
     dataset_train = torch.utils.data.TensorDataset(train_xs, train_is_snow, train_is_cloud, train_ys)
     dataset_val = torch.utils.data.TensorDataset(val_xs, val_is_snow, val_is_cloud, val_ys)
@@ -369,22 +364,22 @@ class SWAGInference(object):
 
         for name, param in self.network.named_parameters():
             # SWAG-diagonal part
-            z_1 = torch.randn(param.size()).to(self.device)            # don't know why but *2 improves it significantly
-            z2 = torch.randn(self.deviation_matrix_max_rank).to(self.device)        # TODO right shape?
-            # TODO(1): Sample parameter values for SWAG-diagonal
+            z_1 = torch.randn(param.size()).to(self.device)
+            z2 = torch.randn(self.deviation_matrix_max_rank).to(self.device)  # TODO right shape?
+
             current_mean = self.first_moment[name]
             current_std = self.second_moment[name] - torch.square(self.first_moment[name])      # removed clamp
             assert current_mean.size() == param.size() and current_std.size() == param.size()
 
             # Diagonal part
-            scale = 1 if self.inferece_mode == InferenceMode.SWAG_DIAGONAL else 1./np.sqrt(2)
+            scale = 1 if self.inference_mode == InferenceMode.SWAG_DIAGONAL else 1./np.sqrt(2)
             sampled_param = current_mean + scale * torch.sqrt(torch.abs(current_std)) * z_1
 
             # Full SWAG part
             if self.inference_mode == InferenceMode.SWAG_FULL:
                 low_rank = torch.zeros_like(param, requires_grad=False)
                 # TODO(2): Sample parameter values for full SWAG
-                for idx,elem in enumerate(self.deviation_queue):
+                for idx, elem in enumerate(self.deviation_queue):
                     low_rank += z2[idx] * elem[name]
 
                 sampled_param += 1/np.sqrt(2*(self.deviation_matrix_max_rank-1)) * low_rank
@@ -393,8 +388,6 @@ class SWAGInference(object):
             param.data = sampled_param
 
         #self._update_batchnorm()
-        # TODO(1): Don't forget to update batch normalization statistics using self._update_batchnorm()
-        #  in the appropriate place!
 
     def predict_labels(self, predicted_probabilities: torch.Tensor) -> torch.Tensor:
         """

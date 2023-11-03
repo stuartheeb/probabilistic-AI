@@ -6,6 +6,7 @@ literature
 *.xml
 *.iml
 *.pdf
+*.byte
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
