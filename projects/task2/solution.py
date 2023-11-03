@@ -12,6 +12,7 @@ import torch.optim
 import torch.utils.data
 import tqdm
 from matplotlib import pyplot as plt
+from collections import deque
 
 from util import draw_reliability_diagram, cost_function, setup_seeds, calc_calibration_curve
 
@@ -64,6 +65,10 @@ def main():
         train_is_snow = train_is_snow.to(device)
         train_is_cloud = train_is_cloud.to(device)
         train_ys = train_ys.to(device)
+        val_xs = val_xs.to(device)
+        val_ys = val_ys.to(device)
+        val_is_cloud = val_is_cloud.to(device)
+        val_is_snow = val_is_snow.to(device)
 
     dataset_train = torch.utils.data.TensorDataset(train_xs, train_is_snow, train_is_cloud, train_ys)
     dataset_val = torch.utils.data.TensorDataset(val_xs, val_is_snow, val_is_cloud, val_ys)
@@ -82,7 +87,6 @@ def main():
         train_xs=dataset_train.tensors[0],
         model_dir=model_dir,
     )
-
     swag.fit(train_loader)
     swag.calibrate(dataset_val)
 
@@ -122,7 +126,7 @@ class SWAGInference(object):
         train_xs: torch.Tensor,
         model_dir: pathlib.Path,
         # TODO(1): change inference_mode to InferenceMode.SWAG_DIAGONAL
-        inference_mode: int = InferenceMode.SWAG_DIAGONAL,
+        inference_mode: int = InferenceMode.SWAG_FULL,
         # TODO(2): change inference_mode to InferenceMode.SWAG_FULL
         # TODO(2): optionally add/tweak hyperparameters
         swag_epochs: int = 30,  # 30
@@ -173,6 +177,8 @@ class SWAGInference(object):
         # Full SWAG
         # TODO(2): create attributes for SWAG-diagonal
         #  Hint: check collections.deque
+        self.deviation_queue = deque([], maxlen=self.deviation_matrix_max_rank)
+        self.deviation = self._create_weight_copy()
 
         # Calibration, prediction, and other attributes
         # TODO(2): create additional attributes, e.g., for calibration
@@ -195,14 +201,14 @@ class SWAGInference(object):
         for name, param in current_params.items():
             self.first_moment[name] = (self.first_moment[name] * self.swag_n + param) / (self.swag_n + 1)     # update each weight
             self.second_moment[name] = (self.second_moment[name] * self.swag_n + torch.square(param)) / (self.swag_n + 1)
-            # TODO(1): update SWAG-diagonal attributes for weight `name` using `current_params` and `param`
-            # raise NotImplementedError("Update SWAG-diagonal statistics")
         self.swag_n += 1
 
         # Full SWAG
         if self.inference_mode == InferenceMode.SWAG_FULL:
             # TODO(2): update full SWAG attributes for weight `name` using `current_params` and `param`
-            raise NotImplementedError("Update full SWAG statistics")
+            for name, param in current_params.items():
+                self.deviation[name] = param - self.first_moment[name]
+            self.deviation_queue.append(self.deviation)
 
     def fit_swag(self, loader: torch.utils.data.DataLoader) -> None:
         """
@@ -295,7 +301,6 @@ class SWAGInference(object):
         # TODO(1): pick a prediction threshold, either constant or adaptive.
         #  The provided value should suffice to pass the easy baseline.
         self._prediction_threshold = 2.0 / 3.0
-        # self._prediction_threshold = 0.7
 
         # TODO(2): perform additional calibration if desired.
         #  Feel free to remove or change the prediction threshold.
@@ -330,9 +335,9 @@ class SWAGInference(object):
             #  and add the predictions to per_model_sample_predictions
             predictions = []
             for (batch_xs, ) in loader:
-                p = self.network(batch_xs)      # TODO softmax where?
-                p = torch.softmax(p, dim=1)
-                predictions.append(p)
+                prediction = self.network(batch_xs)
+                prediction = torch.softmax(prediction, dim=1)
+                predictions.append(prediction)
 
             # concat batchnorm predictions into the right shape
             per_model_sample_predictions.append(torch.concat(predictions))
@@ -361,26 +366,33 @@ class SWAGInference(object):
 
         # set weights and biases
         # Instead of acting on a full vector of parameters, all operations can be done on per-layer parameters.
+
         for name, param in self.network.named_parameters():
             # SWAG-diagonal part
             z_1 = torch.randn(param.size()).to(self.device)            # don't know why but *2 improves it significantly
+            z2 = torch.randn(self.deviation_matrix_max_rank).to(self.device)        # TODO right shape?
             # TODO(1): Sample parameter values for SWAG-diagonal
             current_mean = self.first_moment[name]
             current_std = self.second_moment[name] - torch.square(self.first_moment[name])      # removed clamp
             assert current_mean.size() == param.size() and current_std.size() == param.size()
 
             # Diagonal part
-            sampled_param = current_mean - torch.sqrt(torch.abs(current_std)) * z_1
+            scale = 1 if self.inferece_mode == InferenceMode.SWAG_DIAGONAL else 1./np.sqrt(2)
+            sampled_param = current_mean + scale * torch.sqrt(torch.abs(current_std)) * z_1
+
             # Full SWAG part
             if self.inference_mode == InferenceMode.SWAG_FULL:
+                low_rank = torch.zeros_like(param, requires_grad=False)
                 # TODO(2): Sample parameter values for full SWAG
-                raise NotImplementedError("Sample parameter for full SWAG")
-                sampled_param += ...
+                for idx,elem in enumerate(self.deviation_queue):
+                    low_rank += z2[idx] * elem[name]
+
+                sampled_param += 1/np.sqrt(2*(self.deviation_matrix_max_rank-1)) * low_rank
 
             # Modify weight value in-place; directly changing self.network
             param.data = sampled_param
 
-        # self._update_batchnorm()
+        #self._update_batchnorm()
         # TODO(1): Don't forget to update batch normalization statistics using self._update_batchnorm()
         #  in the appropriate place!
 
@@ -605,7 +617,6 @@ class SWAGInference(object):
             module.momentum = momentum
 
 
-
 class SWAGScheduler(torch.optim.lr_scheduler.LRScheduler):
     """
     Custom learning rate scheduler that calculates a different learning rate each gradient descent step.
@@ -715,7 +726,7 @@ def evaluate(
         fig.savefig(output_dir / "reliability_diagram.pdf")
 
         sorted_confidence_indices = torch.argsort(pred_prob_max)
-        xs = xs.cpu()
+        xs = xs.cpu()       # TODO not sure if right!
 
         # Plot samples your model is most confident about
         print("Plotting most confident validation set predictions")
