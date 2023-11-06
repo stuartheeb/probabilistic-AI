@@ -1,6 +1,7 @@
 *DS_store
 report.txt
 literature
-
-
+.vscode
+*.byte
+*.pdf
 __pycache__/
