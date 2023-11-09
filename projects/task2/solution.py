@@ -16,7 +16,13 @@ from collections import deque
 
 from util import draw_reliability_diagram, cost_function, setup_seeds, calc_calibration_curve
 
-EXTENDED_EVALUATION = True
+torch.manual_seed(1)            # fix seed to test
+torch.cuda.manual_seed(1)
+torch.backends.cudnn.enabled=False
+
+# torch.set_default_tensor_type(torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor)
+
+EXTENDED_EVALUATION = False
 """
 Set `EXTENDED_EVALUATION` to `True` in order to generate additional plots on validation data.
 """
@@ -331,7 +337,6 @@ class SWAGInference(object):
         for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging"):
             # TODO(1): Sample new parameters for self.network from the SWAG approximate posterior
             self.sample_parameters()
-
             self._update_batchnorm()
 
             # TODO(1): Perform inference for all samples in `loader` using current model sample,
@@ -394,6 +399,7 @@ class SWAGInference(object):
                     low_rank_term += z2[idx] * elem[name]
 
                 sampled_param += 1 / ((rank - 1) ** 0.5) * low_rank_term
+                # sampled_param += torch.div(low_rank_term, torch.sqrt(torch.tensor(rank - 1)))
                 scale = 0.5   #  Taken from paper, could be passed as parameter
                 sampled_param *= scale ** 0.5
 
@@ -402,7 +408,7 @@ class SWAGInference(object):
             # Modify weight value in-place; directly changing self.network
             param.data = sampled_param
 
-        #self._update_batchnorm()
+        self._update_batchnorm()
 
     def predict_labels(self, predicted_probabilities: torch.Tensor) -> torch.Tensor:
         """
