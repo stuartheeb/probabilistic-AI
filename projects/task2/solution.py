@@ -22,20 +22,6 @@ from util import draw_reliability_diagram, cost_function, setup_seeds, calc_cali
 # torch.backends.cudnn.deterministic = True
 # torch.backends.cudnn.enabled = True
 
-# parameters
-# SWAG_EPOCHS = 30
-# SWAG_LR = 0.035
-# BMA_SAMPLES = 30
-# PREDICTION_THRESHOLD = 0.71
-# MATRIX_RANK = 15
-
-SWAG_EPOCHS = None
-SWAG_LR = None
-BMA_SAMPLES = None
-PREDICTION_THRESHOLD = None
-MATRIX_RANK = None
-
-
 EXTENDED_EVALUATION = False
 """
 Set `EXTENDED_EVALUATION` to `True` in order to generate additional plots on validation data.
@@ -206,6 +192,12 @@ class SWAGInference(object):
         self.network.to(self.device)
 
     def get_params(self):
+        from os.path import dirname, realpath
+        from os import remove
+
+        dir_path = dirname(realpath(__file__))
+        print("\n\nPath: ", dir_path)
+
         file = r'params.json'
         with open(file, 'r') as f:
             params = json.load(f)
@@ -217,6 +209,7 @@ class SWAGInference(object):
         self._prediction_threshold = params["prediction_threshold"]
         self.deviation_matrix_max_rank = params["matrix_rank"]
         print(f"loaded {params}")
+        remove("params.json")
 
     def update_swag(self) -> None:
         """
