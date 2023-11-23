@@ -19,16 +19,19 @@ class BO_algo():
     def __init__(self):
         """Initializes the algorithm with a parameter configuration."""
         # TODO: Define all relevant class members for your BO algorithm here.
-        v_kernel = DotProduct(sigma_0=0) + Matern(nu=2.5)
-        self.v_gp = GaussianProcessRegressor(kernel=v_kernel, n_restarts_optimizer=10, alpha=STD_DEV_V**2)
+        # v_kernel = DotProduct(sigma_0=0) + Matern(nu=2.5)
+        v_kernel = ConstantKernel(constant_value=4, constant_value_bounds='fixed') \
+        + DotProduct(sigma_0=0) + Matern(nu=2.5, length_scale=0.5, length_scale_bounds='fixed')
+        self.v_gp = GaussianProcessRegressor(kernel=v_kernel, n_restarts_optimizer=10, alpha=2*STD_DEV_V**2)
 
         f_kernel = Matern(nu=2.5) #TODO: try RBF kernel
         # f_kernel = RBF(length_scale=1)
-        self.f_gp = GaussianProcessRegressor(kernel=f_kernel, n_restarts_optimizer=10, alpha=STD_DEV_F**2)
+        self.f_gp = GaussianProcessRegressor(kernel=f_kernel, n_restarts_optimizer=10, alpha=2*STD_DEV_F**2)
 
         self.x = np.array([])
         self.y_f = np.array([])
         self.y_v = np.array([])
+        np.random.seed(0)
 
     def next_recommendation(self):
         """
@@ -94,15 +97,17 @@ class BO_algo():
             Value of the acquisition function at x
         """
         #UCB
-        beta = 5.0
-        gamma = 0.7
+        beta = 4.0
+        gamma = 100
         mean, std = self.f_gp.predict(x.reshape(-1,1), return_std=True)
         mean_v, std_v = self.v_gp.predict(x.reshape(-1,1), return_std=True)
-        # if(mean_v - std_v > SAFETY_THRESHOLD):
-        #     return -10000
-        # else:
-        ucb = mean + beta * std - gamma*np.max(mean_v + beta*std_v, 0) # Calculate UCB.
-        return ucb
+        acc = mean + beta * std - gamma*np.max(mean_v + beta*std_v - SAFETY_THRESHOLD, 0) # Calculate UCB.
+        # while(True):
+        #     rand = np.random.rand(1)*10
+        #     acc, acc_std = self.v_gp.predict(rand.reshape(-1,1), return_std=True)
+        #     if not(acc + 2*acc_std > SAFETY_THRESHOLD):
+        #         return rand
+        return acc
 
     def add_data_point(self, x: float, f: float, v: float):
         """
@@ -135,7 +140,7 @@ class BO_algo():
         def objective(x):
             v_pred = self.v_gp.predict(x.reshape(-1,1))
             if(v_pred > SAFETY_THRESHOLD):
-                return 10000
+                return -self.f_gp.predict(x.reshape(-1,1))[0] + 1e3 * (v_pred - SAFETY_THRESHOLD)
             return -self.f_gp.predict(x.reshape(-1,1))[0]
 
         f_values = []
@@ -173,6 +178,7 @@ class BO_algo():
         plt.plot(n, v_true, label='v true', color='black', alpha=0.7, linestyle='dashed')
         plt.plot(n, v_mean, label='v mean', color='red')
         plt.fill_between(n, f_mean - 2 * f_std, f_mean + 2 * f_std, alpha=0.2)
+        plt.fill_between(n, v_mean- 2 * v_std, v_mean + 2 * v_std, alpha=0.2)
         plt.scatter(self.x, self.y_f, label='f data')
         plt.scatter(self.last_recommended, f_last_recommended, label='last recommended', color='red')
         plt.legend(loc='upper left')
