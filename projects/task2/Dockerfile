@@ -4,6 +4,7 @@ RUN micromamba install -y -n base -f /tmp/env.yaml && \
     micromamba clean --all --yes
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 RUN pip install pyarmor==6.7.4 torch==2.0.1
+RUN pip install "ray[tune]"
 # RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 WORKDIR /code
 ADD * /code/

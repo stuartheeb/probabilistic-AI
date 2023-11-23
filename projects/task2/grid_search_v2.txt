@@ -1,0 +1,63 @@
+Trial status: 50 TERMINATED
+Current time: 2023-11-10 14:48:27. Total running time: 1hr 4min 50s
+Logical resource usage: 12.0/12 CPUs, 1.0/1 GPUs
+Current best trial: 944af933 with cost=0.808 and params={'swag_epochs': 29, 'swag_lr': 0.010387378514881005, 'bma_samples': 32, 'prediction_threshold': 0.7297257824306465, 'matrix_rank': 16}
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Trial name           status         swag_epochs      swag_lr     bma_samples     prediction_threshold     matrix_rank     iter     total time (s)     cost │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ objective_ed3dd685   TERMINATED         30.9866   0.00656019         28.7454                 0.7166           17.7043        1            73.6933    0.998 │
+│ objective_69463842   TERMINATED         31.0112   0.0120807          26.5599                 0.723309         12.3485        1            73.0088    0.892 │
+│ objective_56b3ff52   TERMINATED         27.1234   0.00681825         25.2058                 0.721622         17.8195        1            70.4288    0.945 │
+│ objective_d171417d   TERMINATED         29.3195   0.00791229         26.834                  0.706238         13.8255        1            72.261     0.915 │
+│ objective_a22f7642   TERMINATED         28.6636   0.0095607          31.1185                 0.694607         12.837         1            77.4167    0.906 │
+│ objective_2add123e   TERMINATED         30.9241   0.0054645          32.8518                 0.705712         13.198         1            81.2322    0.874 │
+│ objective_da887046   TERMINATED         34.4889   0.0146563          31.0754                 0.683253         13.0231        1            83.311     0.904 │
+│ objective_cdac7f2c   TERMINATED         31.8423   0.00940152         33.084                  0.684884         13.8277        1            79.2082    0.831 │
+│ objective_7a9c3aa1   TERMINATED         34.0932   0.0075878          26.2204                 0.681719         14.9711        1            79.6259    0.928 │
+│ objective_f45202a6   TERMINATED         30.4671   0.00684854         31.6252                 0.706003         13.8703        1            82.0504    0.953 │
+│ objective_dedfe4b0   TERMINATED         31.8197   0.00769398         33.5962                 0.690425         13.3229        1            80.4057    0.872 │
+│ objective_0a13a7c6   TERMINATED         31.8196   0.00723074         33.5962                 0.691141         13.3228        1            79.3195    0.934 │
+│ objective_748a9b21   TERMINATED         31.5324   0.00999691         33.4256                 0.691114         14.4532        1            79.3465    0.86  │
+│ objective_aa1c5c7e   TERMINATED         29.3182   0.00815524         29.6859                 0.726093         17.9581        1            74.0057    0.878 │
+│ objective_aec0171c   TERMINATED         27.6886   0.0122589          33.0755                 0.695836         13.0547        1            78.5183    0.846 │
+│ objective_950f8953   TERMINATED         30.9578   0.0129806          29.9128                 0.716759         13.5343        1            77.2488    0.899 │
+│ objective_ffe5a8c3   TERMINATED         28.0579   0.00798748         25.7546                 0.703333         16.8714        1            72.6937    0.851 │
+│ objective_45fd6e60   TERMINATED         32.4976   0.0124809          25.825                  0.709687         17.4228        1            73.0111    0.853 │
+│ objective_944af933   TERMINATED         29.0658   0.0103874          32.2813                 0.729726         16.0048        1            79.7613    0.808 │
+│ objective_05e541dc   TERMINATED         26.8953   0.00726859         26.3359                 0.695067         16.4236        1            68.6297    0.977 │
+│ objective_a4cf3f7a   TERMINATED         32.471    0.0145926          27.7141                 0.683108         15.9099        1            76.1181    0.867 │
+│ objective_4cb98b41   TERMINATED         34.1223   0.0129517          26.6382                 0.691896         12.6066        1            76.8919    0.872 │
+│ objective_34f5aaac   TERMINATED         34.3465   0.00663074         32.7744                 0.721881         14.1453        1            85.623     0.918 │
+│ objective_ea364a4c   TERMINATED         28.3043   0.0142242          30.0562                 0.719574         15.0699        1            78.7373    0.9   │
+│ objective_9968c279   TERMINATED         26.8325   0.00781456         33.6388                 0.700813         15.4327        1            80.5018    0.899 │
+│ objective_73932489   TERMINATED         26.8995   0.0133754          31.2484                 0.699177         16.5782        1            77.525     0.864 │
+│ objective_c763f7cd   TERMINATED         26.6323   0.00654924         30.6616                 0.698208         12.3129        1            75.2248    0.939 │
+│ objective_fe9df52f   TERMINATED         30.4937   0.0104621          30.3603                 0.7213           16.8099        1            80.1844    0.86  │
+│ objective_56cf2a9b   TERMINATED         28.382    0.00873171         25.6863                 0.687663         12.4154        1            69.0223    0.863 │
+│ objective_eb4ae63d   TERMINATED         32.2486   0.00635867         29.365                  0.708909         12.9065        1            81.4714    0.918 │
+│ objective_d861beec   TERMINATED         33.5187   0.0131077          27.3589                 0.722523         15.745         1            76.7298    0.885 │
+│ objective_36275877   TERMINATED         26.3002   0.00528764         29.3162                 0.711447         17.0103        1            74.0159    1.072 │
+│ objective_db8b5c45   TERMINATED         32.4405   0.0117461          34.8413                 0.690308         14.2488        1            83.6449    0.858 │
+│ objective_9476864e   TERMINATED         34.621    0.00709553         31.506                  0.698819         17.1099        1            85.3832    0.913 │
+│ objective_9b1e1ea4   TERMINATED         34.0202   0.00604975         29.6343                 0.71645          16.5679        1            78.6503    0.918 │
+│ objective_8fff8bf2   TERMINATED         34.5876   0.0147617          27.8846                 0.689871         17.8286        1            77.4506    0.857 │
+│ objective_6003ad0e   TERMINATED         30.0768   0.00867361         32.7488                 0.690932         12.0617        1            86.6589    0.832 │
+│ objective_994aaf89   TERMINATED         31.1065   0.0149805          31.2532                 0.706103         12.1672        1            81.7856    0.884 │
+│ objective_799dc4c4   TERMINATED         31.6529   0.0109651          30.4044                 0.700037         12.7009        1            79.7912    0.833 │
+│ objective_7dc6cef6   TERMINATED         32.1075   0.0149795          32.9512                 0.694682         14.84          1            86.6652    0.885 │
+│ objective_edcf94ed   TERMINATED         27.4982   0.00709112         30.9467                 0.721249         12.7896        1            78.0994    0.966 │
+│ objective_6d5cd8dd   TERMINATED         29.2196   0.00697757         28.402                  0.684075         17.1281        1            74.0357    0.973 │
+│ objective_8ea21be4   TERMINATED         31.2069   0.00570269         29.3078                 0.725133         16.2261        1            77.6432    0.93  │
+│ objective_9d7fdd4b   TERMINATED         32.746    0.00519062         27.6762                 0.683244         14.4819        1            73.3637    1.053 │
+│ objective_5d1cb02e   TERMINATED         33.9856   0.0147382          27.8487                 0.684771         12.2924        1            76.5622    0.851 │
+│ objective_d59bc107   TERMINATED         29.5108   0.0130016          27.76                   0.702003         12.7817        1            70.9147    0.882 │
+│ objective_ddd284ab   TERMINATED         25.0442   0.00825928         34.8086                 0.697089         12.7325        1            75.2159    0.884 │
+│ objective_212ff803   TERMINATED         33.7067   0.0100076          30.077                  0.693937         15.9161        1            82.9255    0.843 │
+│ objective_02e6df52   TERMINATED         29.9426   0.0145927          27.8113                 0.706548         17.2451        1            75.8096    0.868 │
+│ objective_76a96d82   TERMINATED         29.9003   0.00991296         30.094                  0.691347         13.4808        1            76.3311    0.871 │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+(objective pid=19240) b"Running your solution\nusing device: [cuda:0]\n\n\nPath:  /code\nloaded {'swag_epochs': 29, 'swag_lr': 0.009912963784863518, 'bma_samples': 30, 'prediction_threshold': 0.6913472746222449, 'matrix_rank': 13}\nnetwork is cuda:   True\nEvaluating model on validation data\nAccuracy (raw): 0.5857\nAccuracy (non-ambiguous only, your predictions): 0.5583\nAccuracy (non-ambiguous only, predicting most-likely class): 0.8500\nBest cost 0.6357142925262451 at threshold 0.0\nNote that this threshold does not necessarily generalize to the test set!\nValidation ECE: 0.10851979447262627\nPredicting probabilities on test data\nObtaining labels from your predictions\n\nCongratulations, you beat the easy baseline in terms of public cost.\nHowever, you did not pass the medium baseline yet.\nYour PUBLIC test cost is 0.867 and PUBLIC test ECE is 0.104.\nYour penalized PUBLIC cost 0.871 is thus worse than the medium baseline's PUBLIC cost 0.856.\nDumped check file to /results/results_check.byte\n"
+(objective pid=19240) b"Running your solution\nusing device: [cuda:0]\n\n\nPath:  /code\nloaded {'swag_epochs': 29, 'swag_lr': 0.009912963784863518, 'bma_samples': 30, 'prediction_threshold': 0.6913472746222449, 'matrix_rank': 13}\nnetwork is cuda:   True\nEvaluating model on validation data\nAccuracy (raw): 0.5857\nAccuracy (non-ambiguous only, your predictions): 0.5583\nAccuracy (non-ambiguous only, predicting most-likely class): 0.8500\nBest cost 0.6357142925262451 at threshold 0.0\nNote that this threshold does not necessarily generalize to the test set!\nValidation ECE: 0.10851979447262627\nPredicting probabilities on test data\nObtaining labels from your predictions\n\nCongratulations, you beat the easy baseline in terms of public cost.\nHowever, you did not pass the medium baseline yet.\nYour PUBLIC test cost is 0.867 and PUBLIC test ECE is 0.104.\nYour penalized PUBLIC cost 0.871 is thus worse than the medium baseline's PUBLIC cost 0.856.\nDumped check file to /results/results_check.byte\n"
+(objective pid=19240) error is:   None
+{'swag_epochs': 29, 'swag_lr': 0.010387378514881005, 'bma_samples': 32, 'prediction_threshold': 0.7297257824306465, 'matrix_rank': 16}

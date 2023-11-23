@@ -5,6 +5,7 @@ import math
 import pathlib
 import typing
 import warnings
+import json
 
 import numpy as np
 import torch
@@ -16,7 +17,12 @@ from collections import deque
 
 from util import draw_reliability_diagram, cost_function, setup_seeds, calc_calibration_curve
 
-EXTENDED_EVALUATION = True
+# try out why gpu score is worse than cpu?
+# torch.backends.cudnn.benchmark = True
+# torch.backends.cudnn.deterministic = True
+# torch.backends.cudnn.enabled = True
+
+EXTENDED_EVALUATION = False
 """
 Set `EXTENDED_EVALUATION` to `True` in order to generate additional plots on validation data.
 """
@@ -29,6 +35,7 @@ If you set the constant to `False` (to further experiment),
 this solution always performs MAP inference before running your SWAG implementation.
 Note that MAP inference can take a long time.
 """
+
 
 
 def main():
@@ -125,7 +132,7 @@ class SWAGInference(object):
         # TODO(2): change inference_mode to InferenceMode.SWAG_FULL
         # TODO(2): optionally add/tweak hyperparameters
         swag_epochs: int = 30,
-        swag_learning_rate: float = 0.045,
+        swag_learning_rate: float = 0.0666,
         swag_update_freq: int = 1,
         deviation_matrix_max_rank: int = 15,
         bma_samples: int = 30,
@@ -152,6 +159,9 @@ class SWAGInference(object):
         self.deviation_matrix_max_rank = deviation_matrix_max_rank
         self.bma_samples = bma_samples
 
+        # get params from file
+        self.get_params()
+
         # Network used to perform SWAG.
         # Note that all operations in this class modify this network IN-PLACE!
         self.network = CNN(in_channels=3, out_classes=6)
@@ -177,9 +187,29 @@ class SWAGInference(object):
 
         # Calibration, prediction, and other attributes
         # TODO(2): create additional attributes, e.g., for calibration
-        self._prediction_threshold = None  # this is an example, feel free to be creative
+        # self._prediction_threshold = None  # this is an example, feel free to be creative
 
         self.network.to(self.device)
+
+    def get_params(self):
+        from os.path import dirname, realpath
+        from os import remove
+
+        dir_path = dirname(realpath(__file__))
+        print("\n\nPath: ", dir_path)
+
+        file = r'params.json'
+        with open(file, 'r') as f:
+            params = json.load(f)
+
+        # {'swag_epochs': 25, 'swag_lr': 0.012222562545145955, 'bma_samples': 20, 'prediction_threshold': 0.7083039219612638, 'matrix_rank': 12}
+        self.swag_epochs = params["swag_epochs"]
+        self.swag_learning_rate = params["swag_lr"]
+        self.bma_samples = params["bma_samples"]
+        self._prediction_threshold = params["prediction_threshold"]
+        self.deviation_matrix_max_rank = params["matrix_rank"]
+        print(f"loaded {params}")
+        remove("params.json")
 
     def update_swag(self) -> None:
         """
@@ -188,7 +218,7 @@ class SWAGInference(object):
 
         # Create a copy of the current network weights
         if self.device != "cpu":
-            current_params = {name: param.detach() for name, param in self.network.cuda().named_parameters()}
+            current_params = {name: param.detach() for name, param in self.network.named_parameters()}
         else:
             current_params = {name: param.detach() for name, param in self.network.named_parameters()}
 
@@ -222,13 +252,20 @@ class SWAGInference(object):
         # We use SGD with momentum and weight decay to perform SWA.
         # See the paper on how weight decay corresponds to a type of prior.
         # Feel free to play around with optimization hyperparameters.
-        optimizer = torch.optim.SGD(
+        # optimizer = torch.optim.SGD(
+        #     self.network.parameters(),
+        #     lr=self.swag_learning_rate,
+        #     momentum=0.9,
+        #     nesterov=False,
+        #     weight_decay=1e-4,
+        # )
+
+        optimizer = torch.optim.Adam(           # custom loss
             self.network.parameters(),
             lr=self.swag_learning_rate,
-            momentum=0.9,
-            nesterov=False,
-            weight_decay=1e-4,
+            weight_decay=1e-4
         )
+
         loss = torch.nn.CrossEntropyLoss(
             reduction="mean",
         )
@@ -297,12 +334,8 @@ class SWAGInference(object):
         """
         if self.inference_mode == InferenceMode.MAP:
             # In MAP mode, simply predict argmax and do nothing else
-            self._prediction_threshold = 0.0
+            # self._prediction_threshold = 0.0
             return
-
-        # TODO(1): pick a prediction threshold, either constant or adaptive.
-        #  The provided value should suffice to pass the easy baseline.
-        self._prediction_threshold = 2.0 / 3.0
 
         # TODO(2): perform additional calibration if desired.
         #  Feel free to remove or change the prediction threshold.
@@ -331,8 +364,7 @@ class SWAGInference(object):
         for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging"):
             # TODO(1): Sample new parameters for self.network from the SWAG approximate posterior
             self.sample_parameters()
-
-            self._update_batchnorm()
+            self._update_batchnorm()        # 2 times
 
             # TODO(1): Perform inference for all samples in `loader` using current model sample,
             #  and add the predictions to per_model_sample_predictions
@@ -394,6 +426,7 @@ class SWAGInference(object):
                     low_rank_term += z2[idx] * elem[name]
 
                 sampled_param += 1 / ((rank - 1) ** 0.5) * low_rank_term
+                # sampled_param += torch.div(low_rank_term, torch.sqrt(torch.tensor(rank - 1)))
                 scale = 0.5   #  Taken from paper, could be passed as parameter
                 sampled_param *= scale ** 0.5
 
@@ -402,7 +435,7 @@ class SWAGInference(object):
             # Modify weight value in-place; directly changing self.network
             param.data = sampled_param
 
-        #self._update_batchnorm()
+        self._update_batchnorm()
 
     def predict_labels(self, predicted_probabilities: torch.Tensor) -> torch.Tensor:
         """
@@ -455,7 +488,7 @@ class SWAGInference(object):
         PRETRAINED_WEIGHTS_FILE = self.model_dir / "map_weights.pt"
         if USE_PRETRAINED_INIT:
             if self.device != 'cpu':
-                self.network.cuda().load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE, map_location=self.device))
+                self.network.load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE, map_location=self.device))
             else:
                 self.network.load_state_dict(torch.load(PRETRAINED_WEIGHTS_FILE))
         else:

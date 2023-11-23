@@ -1,0 +1,105 @@
+
+Current time: 2023-11-10 13:33:07. Total running time: 2hr 16min 47s
+Logical resource usage: 12.0/12 CPUs, 1.0/1 GPUs
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Trial name              status         swag_epochs     swag_lr     bma_samples     prediction_threshold     matrix_rank     iter     total time (s)     cost │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ objective_2fbae_00000   TERMINATED              30       0.01               30                     0.68              15        1            77.6293    0.825 │
+│ objective_2fbae_00001   TERMINATED              30       0.01               30                     0.7               15        1            77.245     0.823 │
+│ objective_2fbae_00002   TERMINATED              30       0.01               30                     0.71              15        1            78.8701    0.822 │
+│ objective_2fbae_00003   TERMINATED              30       0.01               30                     0.73              15        1            73.2979    0.83  │
+│ objective_2fbae_00004   TERMINATED              40       0.01               30                     0.68              15        1            85.2245    0.887 │
+│ objective_2fbae_00005   TERMINATED              40       0.01               30                     0.7               15        1            83.354     0.877 │
+│ objective_2fbae_00006   TERMINATED              40       0.01               30                     0.71              15        1            85.6146    0.869 │
+│ objective_2fbae_00007   TERMINATED              40       0.01               30                     0.73              15        1            83.1947    0.861 │
+│ objective_2fbae_00008   TERMINATED              50       0.01               30                     0.68              15        1            91.0653    0.912 │
+│ objective_2fbae_00009   TERMINATED              50       0.01               30                     0.7               15        1            91.1808    0.905 │
+│ objective_2fbae_00010   TERMINATED              50       0.01               30                     0.71              15        1            90.5483    0.906 │
+│ objective_2fbae_00011   TERMINATED              50       0.01               30                     0.73              15        1            94.7322    0.899 │
+│ objective_2fbae_00012   TERMINATED              30       0.015              30                     0.68              15        1            77.7262    0.884 │
+│ objective_2fbae_00013   TERMINATED              30       0.015              30                     0.7               15        1            76.2379    0.899 │
+│ objective_2fbae_00014   TERMINATED              30       0.015              30                     0.71              15        1            75.7325    0.909 │
+│ objective_2fbae_00015   TERMINATED              30       0.015              30                     0.73              15        1            75.2575    0.914 │
+│ objective_2fbae_00016   TERMINATED              40       0.015              30                     0.68              15        1            84.526     0.908 │
+│ objective_2fbae_00017   TERMINATED              40       0.015              30                     0.7               15        1            83.9154    0.92  │
+│ objective_2fbae_00018   TERMINATED              40       0.015              30                     0.71              15        1            87.0251    0.927 │
+│ objective_2fbae_00019   TERMINATED              40       0.015              30                     0.73              15        1            82.6235    0.954 │
+│ objective_2fbae_00020   TERMINATED              50       0.015              30                     0.68              15        1            93.7792    0.859 │
+│ objective_2fbae_00021   TERMINATED              50       0.015              30                     0.7               15        1            93.0842    0.861 │
+│ objective_2fbae_00022   TERMINATED              50       0.015              30                     0.71              15        1            95.2901    0.867 │
+│ objective_2fbae_00023   TERMINATED              50       0.015              30                     0.73              15        1            94.8571    0.878 │
+│ objective_2fbae_00024   TERMINATED              30       0.02               30                     0.68              15        1            77.1189    0.943 │
+│ objective_2fbae_00025   TERMINATED              30       0.02               30                     0.7               15        1            76.0104    0.937 │
+│ objective_2fbae_00026   TERMINATED              30       0.02               30                     0.71              15        1            77.0659    0.938 │
+│ objective_2fbae_00027   TERMINATED              30       0.02               30                     0.73              15        1            77.3636    0.94  │
+│ objective_2fbae_00028   TERMINATED              40       0.02               30                     0.68              15        1            85.5074    0.925 │
+│ objective_2fbae_00029   TERMINATED              40       0.02               30                     0.7               15        1            83.843     0.927 │
+│ objective_2fbae_00030   TERMINATED              40       0.02               30                     0.71              15        1            87.2165    0.929 │
+│ objective_2fbae_00031   TERMINATED              40       0.02               30                     0.73              15        1            85.6762    0.925 │
+│ objective_2fbae_00032   TERMINATED              50       0.02               30                     0.68              15        1            92.7067    0.946 │
+│ objective_2fbae_00033   TERMINATED              50       0.02               30                     0.7               15        1            93.0584    0.946 │
+│ objective_2fbae_00034   TERMINATED              50       0.02               30                     0.71              15        1            95.8618    0.946 │
+│ objective_2fbae_00035   TERMINATED              50       0.02               30                     0.73              15        1            92.3118    0.946 │
+│ objective_2fbae_00036   TERMINATED              30       0.03               30                     0.68              15        1            78.2191    0.946 │
+│ objective_2fbae_00037   TERMINATED              30       0.03               30                     0.7               15        1            76.0707    0.95  │
+│ objective_2fbae_00038   TERMINATED              30       0.03               30                     0.71              15        1            76.2532    0.952 │
+│ objective_2fbae_00039   TERMINATED              30       0.03               30                     0.73              15        1            77.0843    0.953 │
+│ objective_2fbae_00040   TERMINATED              40       0.03               30                     0.68              15        1            82.5951    0.974 │
+│ objective_2fbae_00041   TERMINATED              40       0.03               30                     0.7               15        1            83.8258    0.981 │
+│ objective_2fbae_00042   TERMINATED              40       0.03               30                     0.71              15        1            84.2187    0.983 │
+│ objective_2fbae_00043   TERMINATED              40       0.03               30                     0.73              15        1            82.1427    0.997 │
+│ objective_2fbae_00044   TERMINATED              50       0.03               30                     0.68              15        1            92.5445    0.946 │
+│ objective_2fbae_00045   TERMINATED              50       0.03               30                     0.7               15        1            93.3238    0.947 │
+│ objective_2fbae_00046   TERMINATED              50       0.03               30                     0.71              15        1            92.0758    0.949 │
+│ objective_2fbae_00047   TERMINATED              50       0.03               30                     0.73              15        1            95.4996    0.956 │
+│ objective_2fbae_00048   TERMINATED              30       0.035              30                     0.68              15        1            76.7076    0.981 │
+│ objective_2fbae_00049   TERMINATED              30       0.035              30                     0.7               15        1            74.0103    0.984 │
+│ objective_2fbae_00050   TERMINATED              30       0.035              30                     0.71              15        1            79.0815    0.986 │
+│ objective_2fbae_00051   TERMINATED              30       0.035              30                     0.73              15        1            77.6235    0.987 │
+│ objective_2fbae_00052   TERMINATED              40       0.035              30                     0.68              15        1            88.0059    0.972 │
+│ objective_2fbae_00053   TERMINATED              40       0.035              30                     0.7               15        1            85.7674    0.972 │
+│ objective_2fbae_00054   TERMINATED              40       0.035              30                     0.71              15        1            88.3101    0.972 │
+│ objective_2fbae_00055   TERMINATED              40       0.035              30                     0.73              15        1            86.6178    0.973 │
+│ objective_2fbae_00056   TERMINATED              50       0.035              30                     0.68              15        1            95.4276    1.016 │
+│ objective_2fbae_00057   TERMINATED              50       0.035              30                     0.7               15        1            92.9126    1.016 │
+│ objective_2fbae_00058   TERMINATED              50       0.035              30                     0.71              15        1            91.5545    1.017 │
+│ objective_2fbae_00059   TERMINATED              50       0.035              30                     0.73              15        1            96.5367    1.017 │
+│ objective_2fbae_00060   TERMINATED              30       0.04               30                     0.68              15        1            78.187     1.049 │
+│ objective_2fbae_00061   TERMINATED              30       0.04               30                     0.7               15        1            77.6722    1.052 │
+│ objective_2fbae_00062   TERMINATED              30       0.04               30                     0.71              15        1            78.2196    1.052 │
+│ objective_2fbae_00063   TERMINATED              30       0.04               30                     0.73              15        1            78.1293    1.056 │
+│ objective_2fbae_00064   TERMINATED              40       0.04               30                     0.68              15        1            88.3577    0.971 │
+│ objective_2fbae_00065   TERMINATED              40       0.04               30                     0.7               15        1            85.3315    0.974 │
+│ objective_2fbae_00066   TERMINATED              40       0.04               30                     0.71              15        1            86.949     0.974 │
+│ objective_2fbae_00067   TERMINATED              40       0.04               30                     0.73              15        1            85.1656    0.976 │
+│ objective_2fbae_00068   TERMINATED              50       0.04               30                     0.68              15        1            97.6074    0.968 │
+│ objective_2fbae_00069   TERMINATED              50       0.04               30                     0.7               15        1            94.5328    0.969 │
+│ objective_2fbae_00070   TERMINATED              50       0.04               30                     0.71              15        1            93.0218    0.97  │
+│ objective_2fbae_00071   TERMINATED              50       0.04               30                     0.73              15        1            95.6175    0.972 │
+│ objective_2fbae_00072   TERMINATED              30       0.045              30                     0.68              15        1            78.4574    1.022 │
+│ objective_2fbae_00073   TERMINATED              30       0.045              30                     0.7               15        1            78.8185    1.022 │
+│ objective_2fbae_00074   TERMINATED              30       0.045              30                     0.71              15        1            82.5752    1.022 │
+│ objective_2fbae_00075   TERMINATED              30       0.045              30                     0.73              15        1            76.4874    1.022 │
+│ objective_2fbae_00076   TERMINATED              40       0.045              30                     0.68              15        1            85.5097    1.028 │
+│ objective_2fbae_00077   TERMINATED              40       0.045              30                     0.7               15        1            96.8689    1.03  │
+│ objective_2fbae_00078   TERMINATED              40       0.045              30                     0.71              15        1            87.5994    1.03  │
+│ objective_2fbae_00079   TERMINATED              40       0.045              30                     0.73              15        1            85.9678    1.03  │
+│ objective_2fbae_00080   TERMINATED              50       0.045              30                     0.68              15        1            92.1538    0.944 │
+│ objective_2fbae_00081   TERMINATED              50       0.045              30                     0.7               15        1            93.4966    0.947 │
+│ objective_2fbae_00082   TERMINATED              50       0.045              30                     0.71              15        1            92.5673    0.949 │
+│ objective_2fbae_00083   TERMINATED              50       0.045              30                     0.73              15        1            89.6673    0.955 │
+│ objective_2fbae_00084   TERMINATED              30       0.05               30                     0.68              15        1            75.3964    0.964 │
+│ objective_2fbae_00085   TERMINATED              30       0.05               30                     0.7               15        1            77.6293    0.965 │
+│ objective_2fbae_00086   TERMINATED              30       0.05               30                     0.71              15        1            77.2576    0.967 │
+│ objective_2fbae_00087   TERMINATED              30       0.05               30                     0.73              15        1            75.7739    0.975 │
+│ objective_2fbae_00088   TERMINATED              40       0.05               30                     0.68              15        1            85.6649    0.951 │
+│ objective_2fbae_00089   TERMINATED              40       0.05               30                     0.7               15        1            86.7433    0.953 │
+│ objective_2fbae_00090   TERMINATED              40       0.05               30                     0.71              15        1            83.6117    0.953 │
+│ objective_2fbae_00091   TERMINATED              40       0.05               30                     0.73              15        1            84.5115    0.955 │
+│ objective_2fbae_00092   TERMINATED              50       0.05               30                     0.68              15        1            96.8725    0.941 │
+│ objective_2fbae_00093   TERMINATED              50       0.05               30                     0.7               15        1            93.8367    0.951 │
+│ objective_2fbae_00094   TERMINATED              50       0.05               30                     0.71              15        1            93.8727    0.955 │
+│ objective_2fbae_00095   TERMINATED              50       0.05               30                     0.73              15        1            92.3137    0.96  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+{'swag_epochs': 30, 'swag_lr': 0.01, 'bma_samples': 30, 'prediction_threshold': 0.71, 'matrix_rank': 15}
