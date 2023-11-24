@@ -1,42 +1,37 @@
 """Solution."""
 import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
-
-from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel, DotProduct
 from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import Matern, ConstantKernel, DotProduct, RBF
+import matplotlib.pyplot as plt
+# import additional ...
 
-from scipy.stats import norm
-
-from numpy import random
 
 # global variables
 DOMAIN = np.array([[0, 10]])  # restrict \theta in [0, 10]
 SAFETY_THRESHOLD = 4  # threshold, upper bound of SA
-
-SEED = 0
-
-np.random.seed(SEED)
+STD_DEV_V = 0.0001
+STD_DEV_F = 0.15
 
 # TODO: implement a self-contained solution in the BO_algo class.
 # NOTE: main() is not called by the checker.
 class BO_algo():
     def __init__(self):
         """Initializes the algorithm with a parameter configuration."""
+        # TODO: Define all relevant class members for your BO algorithm here.
+        # v_kernel = DotProduct(sigma_0=0) + Matern(nu=2.5)
+        v_kernel = ConstantKernel(constant_value=4, constant_value_bounds='fixed') \
+        + DotProduct(sigma_0=0) + Matern(nu=2.5, length_scale=0.5, length_scale_bounds='fixed')
+        self.v_gp = GaussianProcessRegressor(kernel=v_kernel, n_restarts_optimizer=10, alpha=2*STD_DEV_V**2)
 
-        # self.f_kernel = Matern(nu=2.5, length_scale_bounds="fixed")
-        self.f_kernel = ConstantKernel(constant_value=0.5, constant_value_bounds='fixed') * \
-                        Matern(length_scale=0.5, nu=2.5, length_scale_bounds='fixed')
-        self.f_GP = GaussianProcessRegressor(kernel=self.f_kernel, alpha=0.15 ** 2, random_state=SEED)
+        f_kernel = Matern(nu=2.5) #TODO: try RBF kernel
+        # f_kernel = RBF(length_scale=1)
+        self.f_gp = GaussianProcessRegressor(kernel=f_kernel, n_restarts_optimizer=10, alpha=2*STD_DEV_F**2)
 
-        # self.v_kernel = Matern(nu=2.5, length_scale_bounds="fixed")
-        self.v_kernel = ConstantKernel(constant_value=4, constant_value_bounds='fixed') + \
-                        ConstantKernel(constant_value=np.sqrt(2), constant_value_bounds='fixed') * \
-                        Matern(length_scale=0.5, nu=2.5, length_scale_bounds='fixed')
-        self.v_GP = GaussianProcessRegressor(kernel=self.v_kernel, alpha=0.0001 ** 2, random_state=SEED)
-
-        self.x_data = np.array([]).reshape(-1, 1)
-        self.f_data = np.array([]).reshape(-1, 1)
-        self.v_data = np.array([]).reshape(-1, 1)
+        self.x = np.array([])
+        self.y_f = np.array([])
+        self.y_v = np.array([])
+        np.random.seed(0)
 
     def next_recommendation(self):
         """
@@ -51,12 +46,11 @@ class BO_algo():
         # using functions f and v.
         # In implementing this function, you may use
         # optimize_acquisition_function() defined below.
-        if self.x_data.size == 0:
-            rec = 10 * np.random.rand()  # random float between 0.0 and 10.0 TODO max 4?
-        else:
-            rec = self.optimize_acquisition_function()
-            # rec = np.array([[rec]]) # No longer needed as fixed in main function
-        return rec
+        while(True):
+            x_opt = self.optimize_acquisition_function()
+            x_opt = np.array([[x_opt]])
+            self.last_recommended = x_opt
+            return x_opt
 
     def optimize_acquisition_function(self):
         """Optimizes the acquisition function defined below (DO NOT MODIFY).
@@ -102,16 +96,18 @@ class BO_algo():
             shape (N, 1)
             Value of the acquisition function at x
         """
-        x = np.atleast_2d(x)
-        # TODO: Implement the acquisition function you want to optimize.
-
-        beta = 0.5
-
-        mu_f, std_f = self.f_GP.predict(x, return_std=True)
-        mu_v, std_v = self.f_GP.predict(x, return_std=True)
-
-        return np.squeeze(mu_f + beta * std_f) * np.squeeze(
-            norm.cdf((mu_v + SAFETY_THRESHOLD) / std_v))
+        #UCB
+        beta = 4.0
+        gamma = 100
+        mean, std = self.f_gp.predict(x.reshape(-1,1), return_std=True)
+        mean_v, std_v = self.v_gp.predict(x.reshape(-1,1), return_std=True)
+        acc = mean + beta * std - gamma*np.max(mean_v + beta*std_v - SAFETY_THRESHOLD, 0) # Calculate UCB.
+        # while(True):
+        #     rand = np.random.rand(1)*10
+        #     acc, acc_std = self.v_gp.predict(rand.reshape(-1,1), return_std=True)
+        #     if not(acc + 2*acc_std > SAFETY_THRESHOLD):
+        #         return rand
+        return acc
 
     def add_data_point(self, x: float, f: float, v: float):
         """
@@ -126,14 +122,11 @@ class BO_algo():
         v: float
             SA constraint func
         """
-        # TODO: Add the observed data {x, f, v} to your model.
-
-        self.x_data = np.vstack((self.x_data, x))
-        self.f_data = np.vstack((self.f_data, f))
-        self.v_data = np.vstack((self.v_data, v))
-
-        self.f_GP.fit(self.x_data, self.f_data)
-        self.v_GP.fit(self.x_data, self.v_data)
+        self.y_f = np.append(self.y_f, f)
+        self.y_v = np.append(self.y_v, v)
+        self.x = np.append(self.x, x)
+        self.f_gp.fit(self.x.reshape(-1,1), self.y_f.reshape(-1,1))
+        self.v_gp.fit(self.x.reshape(-1,1), self.y_v.reshape(-1,1))
 
     def get_solution(self):
         """
@@ -144,12 +137,26 @@ class BO_algo():
         solution: float
             the optimal solution of the problem
         """
-        # TODO: Return your predicted safe optimum of f.
-        masked = self.f_data
-        masked[self.v_data > SAFETY_THRESHOLD] = np.NINF
-        opt_idx = np.argmax(masked)
-        opt = self.x_data[opt_idx, 0]
-        return opt
+        def objective(x):
+            v_pred = self.v_gp.predict(x.reshape(-1,1))
+            if(v_pred > SAFETY_THRESHOLD):
+                return -self.f_gp.predict(x.reshape(-1,1))[0] + 1e3 * (v_pred - SAFETY_THRESHOLD)
+            return -self.f_gp.predict(x.reshape(-1,1))[0]
+
+        f_values = []
+        x_values = []
+        for _ in range(20):
+            x0 = DOMAIN[:, 0] + (DOMAIN[:, 1] - DOMAIN[:, 0]) * \
+                 np.random.rand(DOMAIN.shape[0])
+            x1 = x0.reshape(-1,1)
+            result = fmin_l_bfgs_b(objective, x0=x1, bounds=DOMAIN,
+                                   approx_grad=True)
+            x_values.append(np.clip(result[0], *DOMAIN[0]))
+            f_values.append(-result[1])
+
+        ind = np.argmax(f_values)
+        x_opt = x_values[ind].item()
+        return x_opt
 
     def plot(self, plot_recommendation: bool = True):
         """Plot objective and constraint posterior for debugging (OPTIONAL).
@@ -159,18 +166,39 @@ class BO_algo():
         plot_recommendation: bool
             Plots the recommended point if True.
         """
-        pass
+        self.figure = plt.figure(figsize=(12, 8))
+        n = np.linspace(*DOMAIN[0], 500)
+        f_mean, f_std = self.f_gp.predict(n.reshape(-1,1), return_std=True)
+        v_mean, v_std = self.v_gp.predict(n.reshape(-1,1), return_std=True)
+        f_last_recommended = self.f_gp.predict(self.last_recommended)
+        f_true = np.vectorize(f)(n)
+        v_true = np.vectorize(v)(n)
+        plt.plot(n, f_mean, label='f mean')
+        plt.plot(n, f_true, label='f true', color='grey', alpha=0.7, linestyle='dashed')
+        plt.plot(n, v_true, label='v true', color='black', alpha=0.7, linestyle='dashed')
+        plt.plot(n, v_mean, label='v mean', color='red')
+        plt.fill_between(n, f_mean - 2 * f_std, f_mean + 2 * f_std, alpha=0.2)
+        plt.fill_between(n, v_mean- 2 * v_std, v_mean + 2 * v_std, alpha=0.2)
+        plt.scatter(self.x, self.y_f, label='f data')
+        plt.scatter(self.last_recommended, f_last_recommended, label='last recommended', color='red')
+        plt.legend(loc='upper left')
+        plt.show()
+
+
 
 
 # ---
 # TOY PROBLEM. To check your code works as expected (ignored by checker).
 # ---
-
-def check_in_domain(x: float):
-    """Validate input"""
-    x = np.atleast_2d(x)
-    return np.all(x >= DOMAIN[None, :, 0]) and np.all(x <= DOMAIN[None, :, 1])
-
+def get_initial_safe_point():
+    """Return initial safe point"""
+    x_domain = np.linspace(*DOMAIN[0], 4000)[:, None]
+    c_val = np.vectorize(v)(x_domain)
+    x_valid = x_domain[c_val < SAFETY_THRESHOLD]
+    np.random.seed(0)
+    np.random.shuffle(x_valid)
+    x_init = x_valid[0]
+    return x_init
 
 def f(x: float):
     """Dummy logP objective"""
@@ -180,19 +208,16 @@ def f(x: float):
 
 def v(x: float):
     """Dummy SA"""
-    return 2.0
+    return 3 + 2*np.sin(x*2)
 
 
-def get_initial_safe_point():
-    """Return initial safe point"""
-    x_domain = np.linspace(*DOMAIN[0], 4000)[:, None]
-    c_val = np.vectorize(v)(x_domain)
-    x_valid = x_domain[c_val < SAFETY_THRESHOLD]
-    np.random.seed(SEED)
-    np.random.shuffle(x_valid)
-    x_init = x_valid[0]
+def check_in_domain(x: float):
+    """Validate input"""
+    x = np.atleast_2d(x)
+    return np.all(x >= DOMAIN[None, :, 0]) and np.all(x <= DOMAIN[None, :, 1])
 
-    return x_init
+
+
 
 
 def main():
@@ -210,19 +235,20 @@ def main():
     for j in range(20):
         # Get next recommendation
         x = agent.next_recommendation()
-
-        # Check for valid shape TODO DEACTIVATED FOR NOW
-        # assert x.shape == (1, DOMAIN.shape[0]), \
-        #    f"The function next recommendation must return a numpy array of " \
-        #    f"shape (1, {DOMAIN.shape[0]})"
+        agent.plot()
+        # Check for valid shape
+        assert x.shape == (1, DOMAIN.shape[0]), \
+            f"The function next recommendation must return a numpy array of " \
+            f"shape (1, {DOMAIN.shape[0]})"
 
         # Obtain objective and constraint observation
-        obj_val = f(x) + np.random.randn()
-        cost_val = v(x) + np.random.randn()
+        obj_val = f(x) + np.random.normal(loc=0, scale=STD_DEV_F)
+        cost_val = v(x) + np.random.normal(loc=0, scale=STD_DEV_V)
         agent.add_data_point(x, obj_val, cost_val)
 
     # Validate solution
     solution = agent.get_solution()
+    agent.plot()
     assert check_in_domain(solution), \
         f'The function get solution must return a point within the' \
         f'DOMAIN, {solution} returned instead'
