@@ -23,10 +23,32 @@ class NeuralNetwork(nn.Module):
         # TODO: Implement this function which should define a neural network 
         # with a variable number of hidden layers and hidden units.
         # Here you should define layers which your network will use.
+        layers = []
+
+        # Add input layer to the network
+        layers.append(nn.Linear(input_dim, hidden_size))
+        if activation == 'relu':
+            layers.append(nn.ReLU())
+        elif activation == 'tanh':
+            layers.append(nn.Tanh())
+
+        # Add hidden layers to the network
+        for _ in range(hidden_layers - 1):
+            layers.append(nn.Linear(hidden_size, hidden_size))
+            if activation == 'relu':
+                layers.append(nn.ReLU())
+            elif activation == 'tanh':
+                layers.append(nn.Tanh())
+
+        # Add output layer to the network
+        layers.append(nn.Linear(hidden_size, output_dim))
+
+        # Define the neural network using Sequential container
+        self.model = nn.Sequential(*layers)
 
     def forward(self, s: torch.Tensor) -> torch.Tensor:
         # TODO: Implement the forward pass for the neural network you have defined.
-        pass
+        return self.model(s)
     
 class Actor:
     def __init__(self,hidden_size: int, hidden_layers: int, actor_lr: float,
@@ -47,9 +69,7 @@ class Actor:
         '''
         This function sets up the actor network in the Actor class.
         '''
-        # TODO: Implement this function which sets up the actor network. 
-        # Take a look at the NeuralNetwork class in utils.py. 
-        pass
+        self.model = NeuralNetwork(self.state_dim, self.state_dim, self.hidden_size, self.hidden_layers, 'tanh').to(self.device)
 
     def clamp_log_std(self, log_std: torch.Tensor) -> torch.Tensor:
         '''
@@ -74,8 +94,8 @@ class Actor:
         # TODO: Implement this function which returns an action and its log probability.
         # If working with stochastic policies, make sure that its log_std are clamped 
         # using the clamp_log_std function.
-        assert action.shape == (state.shape[0], self.action_dim) and \
-            log_prob.shape == (state.shape[0], self.action_dim), 'Incorrect shape for action or log_prob.'
+        #action = self.model(state)
+        assert action.shape == (state.shape[0]) and log_prob.shape == (state.shape[0]), 'Incorrect shape for action or log_prob.'
         return action, log_prob
 
 
@@ -125,7 +145,13 @@ class Agent:
         self.max_buffer_size = 100000
         # If your PC possesses a GPU, you should be able to use it for training, 
         # as self.device should be 'cuda' in that case.
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        #self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if torch.cuda.is_available(): 
+            self.device = torch.device("cuda") 
+        elif torch.backends.mps.is_available(): 
+            self.device = torch.device("mps") 
+        else: 
+            self.device = torch.device("cpu") 
         print("Using device: {}".format(self.device))
         self.memory = ReplayBuffer(self.min_buffer_size, self.max_buffer_size, self.device)
         
@@ -133,8 +159,10 @@ class Agent:
 
     def setup_agent(self):
         # TODO: Setup off-policy agent with policy and critic classes. 
-        # Feel free to instantiate any other parameters you feel you might need.   
-        pass
+        # Feel free to instantiate any other parameters you feel you might need. 
+        self.actor = Actor(128, 2, 0.001, self.state_dim, self.action_dim, self.device)
+        self.critic = Critic(128, 2, 0.001, self.state_dim, self.action_dim, self.device)
+        
 
     def get_action(self, s: np.ndarray, train: bool) -> np.ndarray:
         """
@@ -144,7 +172,9 @@ class Agent:
         :return: np.ndarray,, action to apply on the environment, shape (1,)
         """
         # TODO: Implement a function that returns an action from the policy for the state s.
-        action = np.random.uniform(-1, 1, (1,))
+        DETERMNIISTIC = True
+        s = torch.tensor(s, dtype=torch.float, device=self.device)
+        action, _ = self.actor.get_action_and_log_prob(s, DETERMNIISTIC)
 
         assert action.shape == (1,), 'Incorrect action shape.'
         assert isinstance(action, np.ndarray ), 'Action dtype must be np.ndarray' 
