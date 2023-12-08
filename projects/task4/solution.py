@@ -11,14 +11,19 @@ from utils import ReplayBuffer, get_env, run_episode
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-class NeuralNetwork(nn.Module):
+def weights_init(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform_(m.weight, gain=1)
+        torch.nn.init.constant_(m.bias, 0)
+
+class QNetwork(nn.Module):
     '''
     This class implements a neural network with a variable number of hidden layers and hidden units.
     You may use this function to parametrize your policy and critic networks.
     '''
     def __init__(self, input_dim: int, output_dim: int, hidden_size: int, 
                                 hidden_layers: int, activation: str):
-        super(NeuralNetwork, self).__init__()
+        super(QNetwork, self).__init__()
 
         # TODO: Implement this function which should define a neural network 
         # with a variable number of hidden layers and hidden units.
@@ -45,10 +50,53 @@ class NeuralNetwork(nn.Module):
 
         # Define the neural network using Sequential container
         self.model = nn.Sequential(*layers)
+        self.apply(weights_init)
 
     def forward(self, s: torch.Tensor) -> torch.Tensor:
         # TODO: Implement the forward pass for the neural network you have defined.
         return self.model(s)
+    
+class PolicyNetwork(nn.Module):
+    '''
+    This class implements a neural network with a variable number of hidden layers and hidden units.
+    You may use this function to parametrize your policy and critic networks.
+    '''
+    def __init__(self, input_dim: int, output_dim: int, hidden_size: int, 
+                                hidden_layers: int, activation: str):
+        super(PolicyNetwork, self).__init__()
+
+        # TODO: Implement this function which should define a neural network 
+        # with a variable number of hidden layers and hidden units.
+        # Here you should define layers which your network will use.
+        layers = []
+
+        # Add input layer to the network
+        layers.append(nn.Linear(input_dim, hidden_size))
+        if activation == 'relu':
+            layers.append(nn.ReLU())
+        elif activation == 'tanh':
+            layers.append(nn.Tanh())
+
+        # Add hidden layers to the network
+        for _ in range(hidden_layers - 1):
+            layers.append(nn.Linear(hidden_size, hidden_size))
+            if activation == 'relu':
+                layers.append(nn.ReLU())
+            elif activation == 'tanh':
+                layers.append(nn.Tanh())
+
+        # Define the neural network using Sequential container
+        self.model = nn.Sequential(*layers)
+        self.mean = nn.Linear(hidden_size, output_dim)
+        self.log_std = nn.Linear(hidden_size, output_dim)
+        self.apply(weights_init)
+
+    def forward(self, s: torch.Tensor) -> torch.Tensor:
+        # TODO: Implement the forward pass for the neural network you have defined.
+        x = self.model(s)
+        mean = self.mean(x)
+        log_std = self.log_std(x)
+        return mean, log_std
     
 class Actor:
     def __init__(self,hidden_size: int, hidden_layers: int, actor_lr: float,
@@ -69,7 +117,10 @@ class Actor:
         '''
         This function sets up the actor network in the Actor class.
         '''
-        self.model = NeuralNetwork(self.state_dim, self.state_dim, self.hidden_size, self.hidden_layers, 'tanh').to(self.device)
+        self.model = PolicyNetwork(self.state_dim, self.action_dim, self.hidden_size, self.hidden_layers, 'relu').to(self.device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.actor_lr)
+
+        
 
     def clamp_log_std(self, log_std: torch.Tensor) -> torch.Tensor:
         '''
@@ -94,8 +145,23 @@ class Actor:
         # TODO: Implement this function which returns an action and its log probability.
         # If working with stochastic policies, make sure that its log_std are clamped 
         # using the clamp_log_std function.
-        #action = self.model(state)
-        assert action.shape == (state.shape[0]) and log_prob.shape == (state.shape[0]), 'Incorrect shape for action or log_prob.'
+        action, log_prob = self.model(state)
+        log_prob = self.clamp_log_std(log_prob)
+        if(deterministic):
+            action = torch.tanh(action)
+        else:
+            std = log_prob.exp()
+            normal = Normal(action, std)
+            x_t = normal.rsample()
+            action = torch.tanh(x_t)
+            log_prob = normal.log_prob(x_t)
+            log_prob -= torch.log(1 - action.pow(2) + 10e-6)
+            log_prob = log_prob.sum(1, keepdim=True)
+
+
+        # assert action.shape == (state.shape[0], self.action_dim) and \
+        #     log_prob.shape == (state.shape[0], self.action_dim), 'Incorrect shape for action or log_prob.'
+
         return action, log_prob
 
 
@@ -115,7 +181,10 @@ class Critic:
     def setup_critic(self):
         # TODO: Implement this function which sets up the critic(s). Take a look at the NeuralNetwork 
         # class in utils.py. Note that you can have MULTIPLE critic networks in this class.
-        pass
+        self.Q1 = QNetwork(self.state_dim + self.action_dim, self.action_dim, self.hidden_size, self.hidden_layers, 'relu').to(self.device)
+        self.Q2 = QNetwork(self.state_dim + self.action_dim, self.action_dim, self.hidden_size, self.hidden_layers, 'relu').to(self.device)
+        self.optimizer = optim.Adam(list(self.Q1.parameters()) + list(self.Q2.parameters()), lr=self.critic_lr)
+
 
 class TrainableParameter:
     '''
@@ -160,8 +229,9 @@ class Agent:
     def setup_agent(self):
         # TODO: Setup off-policy agent with policy and critic classes. 
         # Feel free to instantiate any other parameters you feel you might need. 
-        self.actor = Actor(128, 2, 0.001, self.state_dim, self.action_dim, self.device)
-        self.critic = Critic(128, 2, 0.001, self.state_dim, self.action_dim, self.device)
+        self.actor = Actor(128, 3, 0.001, self.state_dim, self.action_dim, self.device)
+        self.critic = Critic(128, 3, 0.001, self.state_dim, self.action_dim, self.device)
+        self.critic_target_update(self.critic.Q1, self.critic.Q2, None, False)
         
 
     def get_action(self, s: np.ndarray, train: bool) -> np.ndarray:
@@ -174,8 +244,12 @@ class Agent:
         # TODO: Implement a function that returns an action from the policy for the state s.
         DETERMNIISTIC = True
         s = torch.tensor(s, dtype=torch.float, device=self.device)
-        action, _ = self.actor.get_action_and_log_prob(s, DETERMNIISTIC)
-
+        if train:
+            action, _ = self.actor.get_action_and_log_prob(s, DETERMNIISTIC)
+        else:
+            action, _ = self.actor.model(s)
+        action = action.cpu().detach().numpy()
+        action = action.clip(-1, 1)
         assert action.shape == (1,), 'Incorrect action shape.'
         assert isinstance(action, np.ndarray ), 'Action dtype must be np.ndarray' 
         return action
@@ -192,7 +266,7 @@ class Agent:
         loss.mean().backward()
         object.optimizer.step()
 
-    def critic_target_update(self, base_net: NeuralNetwork, target_net: NeuralNetwork, 
+    def critic_target_update(self, base_net: QNetwork, target_net: QNetwork, 
                              tau: float, soft_update: bool):
         '''
         This method updates the target network parameters using the source network parameters.
@@ -222,21 +296,49 @@ class Agent:
         batch = self.memory.sample(self.batch_size)
         s_batch, a_batch, r_batch, s_prime_batch = batch
 
+        deterministic = False
+        alpha = 0.4
+        gamma = 0.9
+        tau = 0.01
         # TODO: Implement Critic(s) update here.
+        with torch.no_grad():
+            next_state_action, next_state_log_pi = self.actor.get_action_and_log_prob(s_prime_batch, deterministic)
+            q1_next_target = self.critic.Q1(torch.cat((s_prime_batch, next_state_action),dim=1))
+            q2_next_target = self.critic.Q2(torch.cat((s_prime_batch, next_state_action),dim=1))
+            min_q_next_target = torch.min(q1_next_target, q2_next_target) - alpha * next_state_log_pi
+            next_q_value = r_batch + gamma * min_q_next_target
+        q1 = self.critic.Q1(torch.cat((s_batch, a_batch), dim=1))
+        q2 = self.critic.Q2(torch.cat((s_batch, a_batch), dim=1))
+        q1_loss = nn.MSELoss()(q1, next_q_value)
+        q2_loss = nn.MSELoss()(q2, next_q_value)
+        q_loss = q1_loss + q2_loss
 
-        # TODO: Implement Policy update here
+        self.run_gradient_update_step(self.critic, q_loss)
+
+        pi, log_pi = self.actor.get_action_and_log_prob(s_batch, deterministic)
+        q1_pi = self.critic.Q1(torch.cat((s_batch, pi), dim=1))
+        q2_pi = self.critic.Q2(torch.cat((s_batch, pi), dim=1))
+        min_q_pi = torch.min(q1_pi, q2_pi)
+
+        policy_loss = ((alpha * log_pi) - min_q_pi).mean()
+
+        self.run_gradient_update_step(self.actor, policy_loss)
+
+        self.critic_target_update(self.critic.Q1, self.critic.Q2, tau, True)
+
+
 
 
 # This main function is provided here to enable some basic testing. 
 # ANY changes here WON'T take any effect while grading.
 if __name__ == '__main__':
 
-    TRAIN_EPISODES = 50
+    TRAIN_EPISODES = 30
     TEST_EPISODES = 300
 
     # You may set the save_video param to output the video of one of the evalution episodes, or 
     # you can disable console printing during training and testing by setting verbose to False.
-    save_video = False
+    save_video = True
     verbose = True
 
     agent = Agent()
