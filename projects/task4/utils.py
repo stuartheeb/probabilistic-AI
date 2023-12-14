@@ -126,6 +126,6 @@ def run_episode(env, agent, rec=None, verbose=False, train=True):
         state = state_prime
 
     if verbose:
-        print("MODE: {}, RETURN: {:.1f}".format(mode, episode_return))
+        print(f"MODE: {mode}, RETURN: {episode_return:.1f}   alpha: {agent.alpha.item()}")
 
     return episode_return
