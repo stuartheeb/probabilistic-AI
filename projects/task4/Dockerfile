@@ -7,6 +7,7 @@ ADD * /code/
 ADD pytransform /code/pytransform
 ADD requirements.txt /code/requirements.txt
 RUN pip install -r requirements.txt
+RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121   # cuda install
 ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/code/pytransform
 WORKDIR /code
 CMD python -u checker_client.py
