@@ -88,6 +88,7 @@ class GaussianPolicy(nn.Module):
         log_prob = normal.log_prob(x_t)
         # Enforcing Action Bound
         log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6)
+        # log_prob = log_prob.mean(0, keepdim=True)
         # log_prob = log_prob.mean(0, keepdim=True)         # mean and not sum!!! (or ignore)
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
         return action, log_prob, mean
@@ -134,7 +135,7 @@ class DeterministicPolicy(nn.Module):
 
 class Actor:
     def __init__(self, hidden_size: int, hidden_layers: int, actor_lr: float,
-                 state_dim: int = 3, action_dim: int = 1, policy_type='gaussian',
+                 state_dim: int = 3, action_dim: int = 1, policy_type='deterministic',
                  device: torch.device = torch.device('cpu')):
         super(Actor, self).__init__()
 
@@ -245,10 +246,10 @@ class Agent:
         self.min_buffer_size = 1000
         self.max_buffer_size = 100000
         self.updates_per_step = 1
-        self.alpha = 0.2   # 0.2
-        self.gamma = 0.99  # 0.99
-        self.tau = 0.005   # 0.005
-        # If your PC possesses a GPU, you should be able to use it for training,
+        self.alpha = 0.2  # 0.2
+        self.gamma = 0.95  # 0.99
+        self.tau = 0.005  # 0.005
+        # If your PC possesses a GPU, you should be able to use it for training, 
         # as self.device should be 'cuda' in that case.
         # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if torch.cuda.is_available():
@@ -266,10 +267,10 @@ class Agent:
     def setup_agent(self):
         # Setup off-policy agent with policy and critic classes.
         # Feel free to instantiate any other parameters you feel you might need. 
-        self.policy = Actor(64, 2, 0.0005, self.state_dim, self.action_dim,
+        self.policy = Actor(64, 2, 0.005, self.state_dim, self.action_dim,
                             policy_type='gaussian', device=self.device)
-        self.critic = Critic(64, 2, 0.0005, self.state_dim, self.action_dim, self.device)
-        self.critic_target = Critic(64, 2, 0.0005, self.state_dim, self.action_dim, self.device)
+        self.critic = Critic(64, 2, 0.005, self.state_dim, self.action_dim, self.device)
+        self.critic_target = Critic(64, 2, 0.005, self.state_dim, self.action_dim, self.device)
 
         # hard copy weights to target
         self.critic_target_update(self.critic.Q1, self.critic_target.Q1, self.tau, False)
