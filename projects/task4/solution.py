@@ -52,7 +52,7 @@ class NeuralNetwork(nn.Module):
 
 
 class GaussianPolicy(nn.Module):
-    def __init__(self, num_inputs, num_actions, hidden_dim, action_space=None):
+    def __init__(self, num_inputs, num_actions, hidden_dim):
         super(GaussianPolicy, self).__init__()
 
         self.linear1 = nn.Linear(num_inputs, hidden_dim)
@@ -65,15 +65,8 @@ class GaussianPolicy(nn.Module):
 
         self.apply(weights_init_)
 
-        # action rescaling
-        if action_space is None:
-            self.action_scale = torch.tensor(1.)
-            self.action_bias = torch.tensor(0.)
-        else:
-            self.action_scale = torch.FloatTensor(
-                (action_space.high - action_space.low) / 2.)
-            self.action_bias = torch.FloatTensor(
-                (action_space.high + action_space.low) / 2.)
+        self.action_scale = torch.tensor(1.)
+        self.action_bias = torch.tensor(0.)
 
     def forward(self, state):
         x = nn.functional.relu(self.linear1(state))
@@ -104,7 +97,7 @@ class GaussianPolicy(nn.Module):
 
 
 class DeterministicPolicy(nn.Module):
-    def __init__(self, num_inputs, num_actions, hidden_dim, action_space=None):
+    def __init__(self, num_inputs, num_actions, hidden_dim):
         super(DeterministicPolicy, self).__init__()
         self.linear1 = nn.Linear(num_inputs, hidden_dim)
         self.linear2 = nn.Linear(hidden_dim, hidden_dim)
@@ -114,15 +107,8 @@ class DeterministicPolicy(nn.Module):
 
         self.apply(weights_init_)
 
-        # action rescaling
-        if action_space is None:
-            self.action_scale = 1.
-            self.action_bias = 0.
-        else:
-            self.action_scale = torch.FloatTensor(
-                (action_space.high - action_space.low) / 2.)
-            self.action_bias = torch.FloatTensor(
-                (action_space.high + action_space.low) / 2.)
+        self.action_scale = torch.tensor(1.)
+        self.action_bias = torch.tensor(0.)
 
     def forward(self, state):
         x = nn.functional.relu(self.linear1(state))
@@ -132,8 +118,8 @@ class DeterministicPolicy(nn.Module):
 
     def sample(self, state):
         mean = self.forward(state)
-        noise = self.noise.normal_(0., std=0.3)
-        noise = noise.clamp(-0.25, 0.25)
+        noise = self.noise.normal_(0., std=0.4)     # standard is 0.1
+        noise = noise.clamp(-0.3, 0.3)          # standard is 0.25
         action = mean + noise
         return action, torch.tensor(0.), mean
 
@@ -167,9 +153,11 @@ class Actor:
         This function sets up the actor network in the Actor class.
         '''
         if self.policy_type == 'gaussian':
-            self.model = GaussianPolicy(self.state_dim, self.action_dim, self.hidden_size)
+            print("using gaussian policy")
+            self.model = GaussianPolicy(self.state_dim, self.action_dim, self.hidden_size).to(self.device)
         else:
-            self.model = DeterministicPolicy(self.state_dim, self.action_dim, self.hidden_size)
+            print(f"using {self.policy_type} policy")
+            self.model = DeterministicPolicy(self.state_dim, self.action_dim, self.hidden_size).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.actor_lr)
         # TODO automatic entropy tuning
@@ -295,14 +283,17 @@ class Agent:
         """
         # Implement a function that returns an action from the policy for the state s.
 
-        DETERMNIISTIC = False
-        # DETERMNIISTIC = not train
+        DETERMNIISTIC = not train
         s = torch.tensor(s, dtype=torch.float, device=self.device)
         action, _ = self.policy.get_action_and_log_prob(state=s, deterministic=DETERMNIISTIC)
         action = np.clip(action.cpu().detach().numpy(), -1., 1.)
 
         assert action.shape == (1,), 'Incorrect action shape.'
         assert isinstance(action, np.ndarray), 'Action dtype must be np.ndarray'
+
+        # if state is between [90, 270]: hard set to +-1
+        if not train and s[0] < 0.:
+            action = np.array(1.) * np.sign(action)
 
         return action
 
@@ -381,8 +372,8 @@ class Agent:
 # ANY changes here WON'T take any effect while grading.
 if __name__ == '__main__':
 
-    TRAIN_EPISODES = 50  # 50
-    TEST_EPISODES = 1  # 300
+    TRAIN_EPISODES = 60  # 50
+    TEST_EPISODES = 50  # 300
 
     # You may set the save_video param to output the video of one of the evalution episodes, or 
     # you can disable console printing during training and testing by setting verbose to False.
