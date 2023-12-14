@@ -15,7 +15,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 def weights_init_(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight, gain=1)
-        torch.nn.init.constant_(m.bias, 0)
+        # torch.nn.init.constant_(m.weight, 0.)
+        torch.nn.init.constant_(m.bias, 0.)
 
 
 class NeuralNetwork(nn.Module):
@@ -57,8 +58,8 @@ class GaussianPolicy(nn.Module):
 
         self.linear1 = nn.Linear(num_inputs, hidden_dim)
         self.linear2 = nn.Linear(hidden_dim, hidden_dim)
-        self.LOG_SIG_MAX = 20
-        self.LOG_SIG_MIN = -2
+        self.LOG_SIG_MAX = 2
+        self.LOG_SIG_MIN = -20
 
         self.mean_linear = nn.Linear(hidden_dim, num_actions)
         self.log_std_linear = nn.Linear(hidden_dim, num_actions)
@@ -79,14 +80,15 @@ class GaussianPolicy(nn.Module):
     def sample(self, state):
         mean, log_std = self.forward(state)
         std = log_std.exp()
+        # std = torch.clip(std, -0.4, 0.4)
         normal = Normal(mean, std)
-        x_t = normal.rsample()  # for reparameterization trick (mean + std * N(0,1))
+        x_t = normal.rsample()  # for re-parameterization trick (mean + std * N(0,1))
         y_t = torch.tanh(x_t)
         action = y_t * self.action_scale + self.action_bias
         log_prob = normal.log_prob(x_t)
         # Enforcing Action Bound
         log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6)
-        log_prob = log_prob.sum(0, keepdim=True)
+        # log_prob = log_prob.mean(0, keepdim=True)         # mean and not sum!!! (or ignore)
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
         return action, log_prob, mean
 
@@ -184,8 +186,8 @@ class Actor:
         # Implement this function which returns an action and its log probability.
 
         action, log_prob, mean = self.model.sample(state=state)
-
         action = mean if deterministic else action
+
         return action, log_prob
 
 
@@ -243,11 +245,10 @@ class Agent:
         self.min_buffer_size = 1000
         self.max_buffer_size = 100000
         self.updates_per_step = 1
-        self.alpha = 0.4  # 0.2
-        self.gamma = 0.9  # 0.99
-        self.tau = 0.01  # 0.005
-        self.step = 0
-        # If your PC possesses a GPU, you should be able to use it for training, 
+        self.alpha = 0.2   # 0.2
+        self.gamma = 0.99  # 0.99
+        self.tau = 0.005   # 0.005
+        # If your PC possesses a GPU, you should be able to use it for training,
         # as self.device should be 'cuda' in that case.
         # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if torch.cuda.is_available():
@@ -265,10 +266,10 @@ class Agent:
     def setup_agent(self):
         # Setup off-policy agent with policy and critic classes.
         # Feel free to instantiate any other parameters you feel you might need. 
-        self.policy = Actor(64, 2, 0.005, self.state_dim, self.action_dim,
-                            policy_type='deterministic', device=self.device)
-        self.critic = Critic(64, 2, 0.005, self.state_dim, self.action_dim, self.device)
-        self.critic_target = Critic(64, 2, 0.005, self.state_dim, self.action_dim, self.device)
+        self.policy = Actor(64, 2, 0.0005, self.state_dim, self.action_dim,
+                            policy_type='gaussian', device=self.device)
+        self.critic = Critic(64, 2, 0.0005, self.state_dim, self.action_dim, self.device)
+        self.critic_target = Critic(64, 2, 0.0005, self.state_dim, self.action_dim, self.device)
 
         # hard copy weights to target
         self.critic_target_update(self.critic.Q1, self.critic_target.Q1, self.tau, False)
@@ -292,8 +293,8 @@ class Agent:
         assert isinstance(action, np.ndarray), 'Action dtype must be np.ndarray'
 
         # if state is between [90, 270]: hard set to +-1
-        if not train and s[0] < 0.:
-            action = np.array(1.) * np.sign(action)
+        # if not train and s[0] < 0.:
+        #     action = np.array(1.) * np.sign(action)
 
         return action
 
@@ -371,9 +372,8 @@ class Agent:
 # This main function is provided here to enable some basic testing. 
 # ANY changes here WON'T take any effect while grading.
 if __name__ == '__main__':
-
     TRAIN_EPISODES = 60  # 50
-    TEST_EPISODES = 50  # 300
+    TEST_EPISODES = 2  # 300
 
     # You may set the save_video param to output the video of one of the evalution episodes, or 
     # you can disable console printing during training and testing by setting verbose to False.
