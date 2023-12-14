@@ -125,14 +125,14 @@ class DeterministicPolicy(nn.Module):
                 (action_space.high + action_space.low) / 2.)
 
     def forward(self, state):
-        x = F.relu(self.linear1(state))
-        x = F.relu(self.linear2(x))
+        x = nn.functional.relu(self.linear1(state))
+        x = nn.functional.relu(self.linear2(x))
         mean = torch.tanh(self.mean(x)) * self.action_scale + self.action_bias
         return mean
 
     def sample(self, state):
         mean = self.forward(state)
-        noise = self.noise.normal_(0., std=0.1)
+        noise = self.noise.normal_(0., std=0.3)
         noise = noise.clamp(-0.25, 0.25)
         action = mean + noise
         return action, torch.tensor(0.), mean
@@ -143,9 +143,11 @@ class DeterministicPolicy(nn.Module):
         self.noise = self.noise.to(device)
         return super(DeterministicPolicy, self).to(device)
 
+
 class Actor:
     def __init__(self, hidden_size: int, hidden_layers: int, actor_lr: float,
-                 state_dim: int = 3, action_dim: int = 1, device: torch.device = torch.device('cpu')):
+                 state_dim: int = 3, action_dim: int = 1, policy_type='gaussian',
+                 device: torch.device = torch.device('cpu')):
         super(Actor, self).__init__()
 
         self.hidden_size = hidden_size
@@ -157,15 +159,19 @@ class Actor:
         self.LOG_STD_MIN = -20
         self.LOG_STD_MAX = 2
         self.model, self.optimizer = [None] * 2
+        self.policy_type = policy_type
         self.setup_actor()
 
     def setup_actor(self):
         '''
         This function sets up the actor network in the Actor class.
         '''
-        self.model = GaussianPolicy(self.state_dim, self.action_dim, self.hidden_size)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.actor_lr)
+        if self.policy_type == 'gaussian':
+            self.model = GaussianPolicy(self.state_dim, self.action_dim, self.hidden_size)
+        else:
+            self.model = DeterministicPolicy(self.state_dim, self.action_dim, self.hidden_size)
 
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.actor_lr)
         # TODO automatic entropy tuning
 
     def clamp_log_std(self, log_std: torch.Tensor) -> torch.Tensor:
@@ -192,8 +198,6 @@ class Actor:
         action, log_prob, mean = self.model.sample(state=state)
 
         action = mean if deterministic else action
-        # assert action.shape == (state.shape[0]) and log_prob.shape == (state.shape[0]), \
-        #     'Incorrect shape for action or log_prob.'
         return action, log_prob
 
 
@@ -224,24 +228,10 @@ class Critic:
         return self.Q1(both), self.Q2(both)
 
 
-def hard_copy(target: Critic, source: Critic):
-    for target_param, param in zip(target.Q1.parameters(), source.Q1.parameters()):
-        target_param.data.copy_(param.data)
-    for target_param, param in zip(target.Q2.parameters(), source.Q2.parameters()):
-        target_param.data.copy_(param.data)
-
-
-def soft_copy(target: Critic, source: Critic, tau: float):
-    for target_param, param in zip(target.Q1.parameters(), source.Q1.parameters()):
-        target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
-    for target_param, param in zip(target.Q2.parameters(), source.Q2.parameters()):
-        target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
-
-
 class TrainableParameter:
     '''
     This class could be used to define a trainable parameter in your method. You could find it 
-    useful if you try to implement the entropy temerature parameter for SAC algorithm.
+    useful if you try to implement the entropy temperature parameter for SAC algorithm.
     '''
 
     def __init__(self, init_param: float, lr_param: float,
@@ -264,9 +254,11 @@ class Agent:
         self.batch_size = 200
         self.min_buffer_size = 1000
         self.max_buffer_size = 100000
-        self.alpha = 0.2  # 0.2
+        self.updates_per_step = 1
+        self.alpha = 0.4  # 0.2
         self.gamma = 0.9  # 0.99
-        self.tau = 0.005  # 0.005
+        self.tau = 0.01  # 0.005
+        self.step = 0
         # If your PC possesses a GPU, you should be able to use it for training, 
         # as self.device should be 'cuda' in that case.
         # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -279,18 +271,18 @@ class Agent:
 
         print("Using device: {}".format(self.device))
         self.memory = ReplayBuffer(self.min_buffer_size, self.max_buffer_size, self.device)
-        self.actor, self.critic, self.critic_target = [None] * 3
+        self.policy, self.critic, self.critic_target = [None] * 3
         self.setup_agent()
 
     def setup_agent(self):
         # Setup off-policy agent with policy and critic classes.
         # Feel free to instantiate any other parameters you feel you might need. 
-        self.actor = Actor(128, 2, 0.002, self.state_dim, self.action_dim, self.device)
-        self.critic = Critic(128, 2, 0.002, self.state_dim, self.action_dim, self.device)
-        self.critic_target = Critic(128, 2, 0.002, self.state_dim, self.action_dim, self.device)
+        self.policy = Actor(64, 2, 0.005, self.state_dim, self.action_dim,
+                            policy_type='deterministic', device=self.device)
+        self.critic = Critic(64, 2, 0.005, self.state_dim, self.action_dim, self.device)
+        self.critic_target = Critic(64, 2, 0.005, self.state_dim, self.action_dim, self.device)
 
         # hard copy weights to target
-        # hard_copy(self.critic_target, self.critic)
         self.critic_target_update(self.critic.Q1, self.critic_target.Q1, self.tau, False)
         self.critic_target_update(self.critic.Q2, self.critic_target.Q2, self.tau, False)
 
@@ -302,16 +294,16 @@ class Agent:
         :return: np.ndarray, action to apply on the environment, shape (1,)
         """
         # Implement a function that returns an action from the policy for the state s.
+
         DETERMNIISTIC = False
+        # DETERMNIISTIC = not train
         s = torch.tensor(s, dtype=torch.float, device=self.device)
-        if train:
-            action, _ = self.actor.get_action_and_log_prob(s, DETERMNIISTIC)
-        else:
-            _, _, action = self.actor.model.sample(state=s)
+        action, _ = self.policy.get_action_and_log_prob(state=s, deterministic=DETERMNIISTIC)
         action = np.clip(action.cpu().detach().numpy(), -1., 1.)
 
         assert action.shape == (1,), 'Incorrect action shape.'
         assert isinstance(action, np.ndarray), 'Action dtype must be np.ndarray'
+
         return action
 
     @staticmethod
@@ -342,21 +334,11 @@ class Agent:
             else:
                 param_target.data.copy_(param.data)
 
-    def train_agent(self):
-        '''
-        This function represents one training iteration for the agent. It samples a batch 
-        from the replay buffer,and then updates the policy and critic networks 
-        using the sampled batch.
-        '''
-        # TODO: Implement one step of training for the agent.
-        # Hint: You can use the run_gradient_update_step for each policy and critic.
-        # Example: self.run_gradient_update_step(self.policy, policy_loss)
-
-        # Batch sampling
+    def train_agent_iteration(self):
         state_batch, action_batch, reward_batch, next_state_batch = self.memory.sample(self.batch_size)
 
         with torch.no_grad():
-            next_state_action, next_state_log_pi, _ = self.actor.model.sample(next_state_batch)
+            next_state_action, next_state_log_pi, _ = self.policy.model.sample(next_state_batch)
             qf1_next_target, qf2_next_target = self.critic_target(next_state_batch, next_state_action)
             min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - self.alpha * next_state_log_pi
             next_q_value = reward_batch + self.gamma * min_qf_next_target
@@ -369,12 +351,12 @@ class Agent:
 
         self.run_gradient_update_step(self.critic, qf_loss)
 
-        pi, log_pi, _ = self.actor.model.sample(state_batch)
+        pi, log_pi, _ = self.policy.model.sample(state_batch)
         qf1_pi, qf2_pi = self.critic(state_batch, pi)
         min_qf_pi = torch.min(qf1_pi, qf2_pi)
 
         policy_loss = ((self.alpha * log_pi) - min_qf_pi).mean()
-        self.run_gradient_update_step(self.actor, policy_loss)
+        self.run_gradient_update_step(self.policy, policy_loss)
 
         # soft update
         self.critic_target_update(self.critic.Q1, self.critic_target.Q1, self.tau, True)
@@ -382,12 +364,24 @@ class Agent:
         # soft_copy(self.critic_target, self.critic, self.tau)
         # return qf1_loss.item(), qf2_loss.item(), policy_loss.item()
 
+    def train_agent(self):
+        '''
+        This function represents one training iteration for the agent. It samples a batch 
+        from the replay buffer,and then updates the policy and critic networks 
+        using the sampled batch.
+        '''
+        # Implement one step of training for the agent.
+
+        # multiple iterations per step
+        for i in range(self.updates_per_step):
+            self.train_agent_iteration()
+
 
 # This main function is provided here to enable some basic testing. 
 # ANY changes here WON'T take any effect while grading.
 if __name__ == '__main__':
 
-    TRAIN_EPISODES = 100  # 50
+    TRAIN_EPISODES = 50  # 50
     TEST_EPISODES = 1  # 300
 
     # You may set the save_video param to output the video of one of the evalution episodes, or 
