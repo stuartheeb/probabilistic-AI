@@ -135,7 +135,7 @@ class DeterministicPolicy(nn.Module):
 
 class Actor:
     def __init__(self, hidden_size: int, hidden_layers: int, actor_lr: float,
-                 state_dim: int = 3, action_dim: int = 1, policy_type='deterministic',
+                 state_dim: int = 3, action_dim: int = 1, policy_type='deterministic', automatic_entropy_tuning=True,
                  device: torch.device = torch.device('cpu')):
         super(Actor, self).__init__()
 
@@ -149,6 +149,7 @@ class Actor:
         self.LOG_STD_MAX = 2
         self.model, self.optimizer = [None] * 2
         self.policy_type = policy_type
+        self.automatic_entropy_tuning = automatic_entropy_tuning
         self.setup_actor()
 
     def setup_actor(self):
@@ -158,12 +159,16 @@ class Actor:
         if self.policy_type == 'gaussian':
             print("using gaussian policy")
             self.model = GaussianPolicy(self.state_dim, self.action_dim, self.hidden_size).to(self.device)
+
+            if self.automatic_entropy_tuning:
+                self.target_entropy = -1.  # - dimension of action space
+                self.log_alpha = torch.tensor([np.log(0.2)], requires_grad=True, dtype=torch.float32, device=self.device)
+                self.alpha_optim = optim.Adam([self.log_alpha], lr=self.actor_lr)
         else:
             print(f"using {self.policy_type} policy")
             self.model = DeterministicPolicy(self.state_dim, self.action_dim, self.hidden_size).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.actor_lr)
-        # TODO automatic entropy tuning
 
     def clamp_log_std(self, log_std: torch.Tensor) -> torch.Tensor:
         '''
@@ -190,6 +195,18 @@ class Actor:
         action = mean if deterministic else action
 
         return action, log_prob
+
+    def alpha_update_step(self, log_pi, alpha):
+        if self.automatic_entropy_tuning:
+            alpha_loss = -(self.log_alpha * (log_pi + self.target_entropy).detach()).mean()
+
+            self.alpha_optim.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optim.step()
+
+            return self.log_alpha.exp()
+        else:
+            return alpha
 
 
 class Critic:
@@ -219,36 +236,19 @@ class Critic:
         return self.Q1(both), self.Q2(both)
 
 
-class TrainableParameter:
-    '''
-    This class could be used to define a trainable parameter in your method. You could find it 
-    useful if you try to implement the entropy temperature parameter for SAC algorithm.
-    '''
-
-    def __init__(self, init_param: float, lr_param: float,
-                 train_param: bool, device: torch.device = torch.device('cpu')):
-        self.log_param = torch.tensor(np.log(init_param), requires_grad=train_param, device=device)
-        self.optimizer = optim.Adam([self.log_param], lr=lr_param)
-
-    def get_param(self) -> torch.Tensor:
-        return torch.exp(self.log_param)
-
-    def get_log_param(self) -> torch.Tensor:
-        return self.log_param
-
-
 class Agent:
     def __init__(self):
         # Environment variables. You don't need to change this.
         self.state_dim = 3  # [cos(theta), sin(theta), theta_dot]
         self.action_dim = 1  # [torque] in[-1,1]
-        self.batch_size = 200
+        self.batch_size = 1000
         self.min_buffer_size = 1000
         self.max_buffer_size = 100000
         self.updates_per_step = 1
         self.alpha = 0.2  # 0.2
         self.gamma = 0.95  # 0.99
         self.tau = 0.005  # 0.005
+        self.lr = 0.001
         # If your PC possesses a GPU, you should be able to use it for training, 
         # as self.device should be 'cuda' in that case.
         # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -267,10 +267,10 @@ class Agent:
     def setup_agent(self):
         # Setup off-policy agent with policy and critic classes.
         # Feel free to instantiate any other parameters you feel you might need. 
-        self.policy = Actor(64, 2, 0.005, self.state_dim, self.action_dim,
-                            policy_type='gaussian', device=self.device)
-        self.critic = Critic(64, 2, 0.005, self.state_dim, self.action_dim, self.device)
-        self.critic_target = Critic(64, 2, 0.005, self.state_dim, self.action_dim, self.device)
+        self.policy = Actor(64, 2, self.lr, self.state_dim, self.action_dim,
+                            policy_type='gaussian', automatic_entropy_tuning=True, device=self.device)
+        self.critic = Critic(64, 2, self.lr, self.state_dim, self.action_dim, self.device)
+        self.critic_target = Critic(64, 2, self.lr, self.state_dim, self.action_dim, self.device)
 
         # hard copy weights to target
         self.critic_target_update(self.critic.Q1, self.critic_target.Q1, self.tau, False)
@@ -293,9 +293,9 @@ class Agent:
         assert action.shape == (1,), 'Incorrect action shape.'
         assert isinstance(action, np.ndarray), 'Action dtype must be np.ndarray'
 
-        # if state is between [90, 270]: hard set to +-1
-        # if not train and s[0] < 0.:
-        #     action = np.array(1.) * np.sign(action)
+        # if state is between [90, 270]: hard set to +-1 (quicker conversion)
+        if not train and s[0] < 0.:
+            action = np.array(1.) * np.sign(action)
 
         return action
 
@@ -351,6 +351,9 @@ class Agent:
         policy_loss = ((self.alpha * log_pi) - min_qf_pi).mean()
         self.run_gradient_update_step(self.policy, policy_loss)
 
+        # update alpha if automatic_entropy_tuning is true, else leave it
+        self.alpha = self.policy.alpha_update_step(log_pi=log_pi, alpha=self.alpha)
+
         # soft update
         self.critic_target_update(self.critic.Q1, self.critic_target.Q1, self.tau, True)
         self.critic_target_update(self.critic.Q2, self.critic_target.Q2, self.tau, True)
@@ -373,8 +376,8 @@ class Agent:
 # This main function is provided here to enable some basic testing. 
 # ANY changes here WON'T take any effect while grading.
 if __name__ == '__main__':
-    TRAIN_EPISODES = 60  # 50
-    TEST_EPISODES = 2  # 300
+    TRAIN_EPISODES = 80  # 50
+    TEST_EPISODES = 10  # 300
 
     # You may set the save_video param to output the video of one of the evalution episodes, or 
     # you can disable console printing during training and testing by setting verbose to False.
