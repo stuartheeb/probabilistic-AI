@@ -253,7 +253,7 @@ class Agent:
         self.batch_size = 200
         self.min_buffer_size = 1000
         self.max_buffer_size = 100000
-        self.updates_per_step = 1
+        self.updates_per_step = 10
         # self.alpha = 0.2  # 0.2
         self.alpha = TrainableParameter(0.2, 0.0001, True, self.device)
         self.gamma = 0.99  # 0.99
@@ -271,10 +271,10 @@ class Agent:
     def setup_agent(self):
         # Setup off-policy agent with policy and critic classes.
         # Feel free to instantiate any other parameters you feel you might need. 
-        self.policy = Actor(128, 2, 0.005, self.state_dim, self.action_dim,
+        self.policy = Actor(128, 2, 0.003, self.state_dim, self.action_dim,
                             policy_type='gaussian', device=self.device)
-        self.critic = Critic(128, 2, 0.005, self.state_dim, self.action_dim, self.device)
-        self.critic_target = Critic(128, 2, 0.005, self.state_dim, self.action_dim, self.device)
+        self.critic = Critic(128, 2, 0.003, self.state_dim, self.action_dim, self.device)
+        self.critic_target = Critic(128, 2, 0.00, self.state_dim, self.action_dim, self.device)
 
         # hard copy weights to target
         self.critic_target_update(self.critic.Q1, self.critic_target.Q1, self.tau, False)
@@ -297,7 +297,7 @@ class Agent:
         assert action.shape == (1,), 'Incorrect action shape.'
         assert isinstance(action, np.ndarray), 'Action dtype must be np.ndarray'
 
-        # if state is between [90, 270]: hard set to +-1
+        #if state is between [90, 270]: hard set to +-1
         # if not train and s[0] < 0.:
         #     action = np.array(1.) * np.sign(action)
 
