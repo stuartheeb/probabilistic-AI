@@ -1,5 +1,15 @@
 # Task 1 -- Gaussian Processes
 
+## Problem
+
+[Task description](task1_description.pdf)
+
+## Code
+
+[Python file](solution.py)
+
+## Report
+
 For the first task, we are asked to predict the concentration of fine particulate matter (pm25). The data is given by lat/lon positions and corresponding pm25 concentrations, for each of which it is indicated whether is it a candidate location for new residential areas (1) or not (0). This indicator is very important, because the loss is computed as a weighted sum of squared differences, where there is a weight penalty factor of 50 when we *under*estimate a potential residential area, and a unit weight otherwise.
 
 As preprocessing, we fill out the skeleton function simply by dividing up the original train_x and train_y data into the desired columns, separating lat/lon from the area data.
