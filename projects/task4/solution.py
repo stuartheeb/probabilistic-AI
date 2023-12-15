@@ -162,7 +162,7 @@ class Actor:
 
             if self.automatic_entropy_tuning:
                 self.target_entropy = -1.  # - dimension of action space
-                self.log_alpha = torch.tensor([np.log(0.2)], requires_grad=True, dtype=torch.float32, device=self.device)
+                self.log_alpha = torch.tensor([np.log(0.3)], requires_grad=True, dtype=torch.float32, device=self.device)
                 self.alpha_optim = optim.Adam([self.log_alpha], lr=self.actor_lr)
         else:
             print(f"using {self.policy_type} policy")
@@ -241,14 +241,14 @@ class Agent:
         # Environment variables. You don't need to change this.
         self.state_dim = 3  # [cos(theta), sin(theta), theta_dot]
         self.action_dim = 1  # [torque] in[-1,1]
-        self.batch_size = 1000
+        self.batch_size = 500
         self.min_buffer_size = 1000
         self.max_buffer_size = 100000
         self.updates_per_step = 1
         self.alpha = 0.2  # 0.2
-        self.gamma = 0.95  # 0.99
+        self.gamma = 0.99  # 0.99
         self.tau = 0.005  # 0.005
-        self.lr = 0.001
+        self.lr = 0.0005
         # If your PC possesses a GPU, you should be able to use it for training, 
         # as self.device should be 'cuda' in that case.
         # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -267,14 +267,16 @@ class Agent:
     def setup_agent(self):
         # Setup off-policy agent with policy and critic classes.
         # Feel free to instantiate any other parameters you feel you might need. 
-        self.policy = Actor(64, 2, self.lr, self.state_dim, self.action_dim,
+        self.policy = Actor(128, 2, self.lr, self.state_dim, self.action_dim,
                             policy_type='gaussian', automatic_entropy_tuning=True, device=self.device)
-        self.critic = Critic(64, 2, self.lr, self.state_dim, self.action_dim, self.device)
-        self.critic_target = Critic(64, 2, self.lr, self.state_dim, self.action_dim, self.device)
+        self.critic = Critic(128, 2, self.lr, self.state_dim, self.action_dim, self.device)
+        self.critic_target = Critic(128, 2, self.lr, self.state_dim, self.action_dim, self.device)
 
         # hard copy weights to target
         self.critic_target_update(self.critic.Q1, self.critic_target.Q1, self.tau, False)
         self.critic_target_update(self.critic.Q2, self.critic_target.Q2, self.tau, False)
+
+        self.alpha = torch.tensor(self.alpha)
 
     def get_action(self, s: np.ndarray, train: bool) -> np.ndarray:
         """
@@ -288,7 +290,7 @@ class Agent:
         DETERMNIISTIC = not train
         s = torch.tensor(s, dtype=torch.float, device=self.device)
         action, _ = self.policy.get_action_and_log_prob(state=s, deterministic=DETERMNIISTIC)
-        action = np.clip(action.cpu().detach().numpy(), -1., 1.)
+        action = np.clip(action.cpu().detach().numpy(), a_min=-1., a_max=1.)
 
         assert action.shape == (1,), 'Incorrect action shape.'
         assert isinstance(action, np.ndarray), 'Action dtype must be np.ndarray'
@@ -376,7 +378,7 @@ class Agent:
 # This main function is provided here to enable some basic testing. 
 # ANY changes here WON'T take any effect while grading.
 if __name__ == '__main__':
-    TRAIN_EPISODES = 80  # 50
+    TRAIN_EPISODES = 70  # 50
     TEST_EPISODES = 10  # 300
 
     # You may set the save_video param to output the video of one of the evalution episodes, or 
