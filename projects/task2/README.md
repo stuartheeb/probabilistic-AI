@@ -6,6 +6,8 @@
 
 ## Code
 
+Located in directory `handin`
+
 [Python file](handin/solution.py)
 
 ## Report
