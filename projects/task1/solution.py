@@ -4,8 +4,6 @@ from sklearn.gaussian_process.kernels import *
 import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.preprocessing import StandardScaler
-#import matplotlib.pyplot as plt
-#from matplotlib import cm
 
 import gpytorch
 import torch
@@ -27,20 +25,20 @@ N_CLUSTERS = 10
 
 # Training constants
 LOAD_PRETRAINED_MODEL = True
-TRAINING_ITERATIONS = 500 # Irrelevant when LOAD_PRETRAINED_MODEL = True
+TRAINING_ITERATIONS = 500  # Irrelevant when LOAD_PRETRAINED_MODEL = True
+
 
 class GP(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):
-        #super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
         super().__init__(train_x, train_y, likelihood)
         self.mean_module = gpytorch.means.ConstantMean()
-        #self.mean_module = gpytorch.means.ZeroMean() # TODO: Try this: its not better
         self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-    
+
     def forward(self, x):
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
 
 class Model(object):
     """
@@ -56,8 +54,6 @@ class Model(object):
         """
         self.rng = np.random.default_rng(seed=0)
 
-        # TODO: Add custom initialization for your model here if necessary
-
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
     def make_predictions(self, test_x_2D: np.ndarray, test_x_AREA: np.ndarray) -> typing.Tuple[
@@ -70,20 +66,17 @@ class Model(object):
             Tuple of three 1d NumPy float arrays, each of shape (NUM_SAMPLES,),
             containing your predictions, the GP posterior mean, and the GP posterior stddev (in that order)
         """
-        
+
         self.model.eval()
         self.likelihood.eval()
 
-        # TODO: Use your GP to estimate the posterior mean and stddev for each city_area here
         tt = torch.tensor(test_x_2D, dtype=torch.float32)
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
             output = self.model(tt)
-            
             gp_mean = output.mean.numpy()
             gp_std = output.stddev.numpy()
 
-        # TODO: Use the GP posterior to form your predictions here
-        CORRECTIVE_FACTOR = 0.75 # To counteract weighted loss. Factor 0.75 seems to work well
+        CORRECTIVE_FACTOR = 0.75  # To counteract weighted loss. Factor 0.75 seems to work well
         predictions = gp_mean + CORRECTIVE_FACTOR * test_x_AREA * gp_std
         print("Factor: " + str(CORRECTIVE_FACTOR))
 
@@ -95,18 +88,13 @@ class Model(object):
         :param train_x_2D: Training features as a 2d NumPy float array of shape (NUM_SAMPLES, 2)
         :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
         """
-
-        # TODO: Maybe preprocessing?
-
         x = torch.tensor(train_x_2D, dtype=torch.float32)
         y = torch.tensor(train_y, dtype=torch.float32)
         self.model = GP(x, y, self.likelihood)
 
-        # TODO: Fit your model here        
-
-        if(LOAD_PRETRAINED_MODEL):
+        if (LOAD_PRETRAINED_MODEL):
             print("Loading pretrained model...")
-            pretrained = torch.load('pretrained.pth', map_location = torch.device('cpu'))
+            pretrained = torch.load('pretrained.pth', map_location=torch.device('cpu'))
             self.model.load_state_dict(pretrained)
         else:
             print("Training new model...")
@@ -120,10 +108,6 @@ class Model(object):
             for i in range(TRAINING_ITERATIONS):
                 optimizer.zero_grad()
                 output = self.model(x)
-                #
-                # TODO Add functionality to compute test score and save best
-                # test-scoring model separately
-                #
                 loss = -mll(output, y)
                 loss.backward()
                 print('Iter %d/%d - Loss: %.3f   lengthscale: %.3f   noise: %.3f' % (
@@ -132,9 +116,10 @@ class Model(object):
                     self.model.likelihood.noise.item()
                 ))
                 optimizer.step()
-            
+
             print("Saving model...")
             torch.save(self.model.state_dict(), 'pretrained.pth')
+
 
 # You don't have to change this function
 def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: np.ndarray) -> float:
@@ -159,6 +144,7 @@ def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: 
     # Weigh the cost and return the average
     return np.mean(cost * weights)
 
+
 # You don't have to change this function
 def is_in_circle(coor, circle_coor):
     """
@@ -168,6 +154,7 @@ def is_in_circle(coor, circle_coor):
     :return: True if the coordinate is inside the circle, False otherwise
     """
     return (coor[0] - circle_coor[0]) ** 2 + (coor[1] - circle_coor[1]) ** 2 < circle_coor[2] ** 2
+
 
 # You don't have to change this function
 def determine_city_area_idx(visualization_xs_2D):
@@ -199,6 +186,7 @@ def determine_city_area_idx(visualization_xs_2D):
         visualization_xs_AREA[i] = any([is_in_circle(coor, circ) for circ in circles])
 
     return visualization_xs_AREA
+
 
 # You don't have to change this function
 def perform_extended_evaluation(model: Model, output_dir: str = '/results'):
@@ -237,6 +225,7 @@ def perform_extended_evaluation(model: Model, output_dir: str = '/results'):
 
     plt.show()
 
+
 def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> typing.Tuple[
     np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -251,7 +240,6 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
     test_x_2D = np.zeros((test_x.shape[0], 2), dtype=float)
     test_x_AREA = np.zeros((test_x.shape[0],), dtype=bool)
 
-    # TODO: Extract the city_area information from the training and test features
     train_x_2D = train_x[:, :2]
     train_x_AREA = train_x[:, -1]
     test_x_2D = test_x[:, :2]
@@ -263,6 +251,7 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
 
     return train_x_2D, train_x_AREA, test_x_2D, test_x_AREA
 
+
 # you don't have to change this function
 def main():
     # Load the training dateset and test features
@@ -271,7 +260,6 @@ def main():
     test_x = np.loadtxt('test_x.csv', delimiter=',', skiprows=1)
     print([train_x.shape, train_y.shape, test_x.shape])
 
-    
     # Extract the city_area information
     train_x_2D, train_x_AREA, test_x_2D, test_x_AREA = extract_city_area_information(train_x, test_x)
     # Fit the model

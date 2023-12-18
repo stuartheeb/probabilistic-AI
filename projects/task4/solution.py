@@ -121,8 +121,8 @@ class DeterministicPolicy(nn.Module):
 
     def sample(self, state):
         mean = self.forward(state)
-        noise = self.noise.normal_(0., std=0.4)     # standard is 0.1
-        noise = noise.clamp(-0.3, 0.3)          # standard is 0.25
+        noise = self.noise.normal_(0., std=0.4)  # standard is 0.1
+        noise = noise.clamp(-0.3, 0.3)  # standard is 0.25
         action = mean + noise
         return action, torch.tensor(0.), mean
 
@@ -163,7 +163,6 @@ class Actor:
             self.model = DeterministicPolicy(self.state_dim, self.action_dim, self.hidden_size).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.actor_lr)
-        # TODO automatic entropy tuning
 
     def clamp_log_std(self, log_std: torch.Tensor) -> torch.Tensor:
         '''
@@ -297,7 +296,7 @@ class Agent:
         assert action.shape == (1,), 'Incorrect action shape.'
         assert isinstance(action, np.ndarray), 'Action dtype must be np.ndarray'
 
-        #if state is between [90, 270]: hard set to +-1
+        # if state is between [90, 270]: hard set to +-1
         # if not train and s[0] < 0.:
         #     action = np.array(1.) * np.sign(action)
 
@@ -337,7 +336,8 @@ class Agent:
         with torch.no_grad():
             next_state_action, next_state_log_pi, _ = self.policy.model.sample(next_state_batch)
             qf1_next_target, qf2_next_target = self.critic_target(next_state_batch, next_state_action)
-            min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - self.alpha.get_param() * next_state_log_pi
+            min_qf_next_target = torch.min(qf1_next_target,
+                                           qf2_next_target) - self.alpha.get_param() * next_state_log_pi
             next_q_value = reward_batch + self.gamma * min_qf_next_target
 
         # Two Q-functions to mitigate positive bias in the policy improvement step

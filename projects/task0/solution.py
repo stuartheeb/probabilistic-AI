@@ -45,7 +45,7 @@ def log_posterior_probs(x):
     log_p1 = np.sum(np.log(norm.pdf(x, loc=0.0, scale=np.sqrt(VARIANCE)))) + np.log(PRIOR_PROBS[0])
     log_p2 = np.sum(np.log(laplace.pdf(x, loc=0.0, scale=1))) + np.log(PRIOR_PROBS[1])
     log_p3 = np.sum(np.log(t.pdf(x, loc=0.0, df=4))) + np.log(PRIOR_PROBS[2])
-    log_p_unnormalized = np.array([log_p1,log_p2,log_p3])
+    log_p_unnormalized = np.array([log_p1, log_p2, log_p3])
     normalized = scipy.special.logsumexp(log_p_unnormalized)
     log_p = log_p_unnormalized - normalized
     assert log_p.shape == (3,)
